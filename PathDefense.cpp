@@ -79,6 +79,8 @@ typedef struct base {
 // タワーを表す構造体
 typedef struct tower {
   int id;       // ID
+  int y;        // y座標
+  int x;        // x座標
   int range;    // 射程距離
   int damage;   // 攻撃力
   int cost;     // 建設コスト
@@ -88,6 +90,10 @@ typedef struct tower {
     this->range   = range;
     this->damage  = damage;
     this->cost    = cost;
+
+    // 位置情報は建設時に設定
+    this->y       = UNDEFINED;
+    this->x       = UNDEFINED;
   }
 } TOWER;
 
@@ -127,7 +133,10 @@ CREEP g_creepList[MAX_Z];
 TOWER g_towerList[MAX_T];
 
 // 建設済みのタワーリスト
-TOWER g_buildedTowerList[LIMIT_TURN];
+vector<TOWER> g_buildedTowerList;
+
+// 建設したタワーの数
+int g_buildedTowerCount;
 
 class PathDefense{
   public:
@@ -155,6 +164,9 @@ class PathDefense{
 
       // 初期の所持金
       g_currentAmountMoney = money;
+
+      // 建設したタワーの数を初期化
+      g_buildedTowerCount = 0;
 
       // 報酬の初期化
       g_reward = creepMoney;
@@ -275,6 +287,21 @@ class PathDefense{
     }
 
     /*
+     * タワーの建設を行う(ゲーム中に使用)
+     *   towerId: 建設するタワーの種類
+     *         y: 建設を行うy座標
+     *         x: 建設を行うx座標
+     */
+    void buildTower(int towerId, int y, int x){
+      TOWER tower = getTower(towerId);
+      tower.y = y;
+      tower.x = x;
+
+      // 建設したタワーリストに追加
+      g_buildedTowerList.push_back(tower);
+    }
+
+    /*
      * 指定したIDの基地を取得する
      *   baseId: 基地ID
      */
@@ -288,6 +315,14 @@ class PathDefense{
      */
     CREEP* getCreep(int creepId){
       return &g_creepList[creepId];
+    }
+
+    /*
+     * 指定したIDのタワー情報を取得
+     *   towerId: タワーID
+     */
+    TOWER getTower(int towerId){
+      return g_towerList[towerId];
     }
 
     /*
