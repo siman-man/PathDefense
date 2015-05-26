@@ -182,14 +182,31 @@ then multiplied by 1000000 and divided by the number of test cases.
 Please look at the visualizer source code for more detail about test case generation. Each test case is generated as follows:
 
 - The map size N is randomly selected between 20 and 60, inclusive.
+マップサイズNは20から60の値を取ります。
+
 - The creep starting health is chosen between 1 and 20. The money reward for a creep is chosen between 1 and 20.
+敵の初期体力は1から20の値を取ります。また敵を倒した時の報酬も1から20の値を取ります。
+
 - The number of tower types T is randomly selected between 1 and 20, inclusive. For each tower type the range is chosen between 1 and 5. The damage done is chosen between 1 and 5. The cost is chosen between 5 and 40.
+タワーのタイプの数は1から20の値を取ります。射程距離は1から5、攻撃力は1から5、建設コストは5から40の値を取ります。
+
 - The starting amount of money is equal to the sum of all tower type costs.
+初期の所持金は建設可能なタワーの建設コストの合計値です
+
 - The number of bases B is randomly selected between 1 and 8, inclusive. The location of each base is selected randomly and will be at least 4 cells away from the boundary of the map.
+基地IDの1から8の値がランダムに割り振られます。また、基地の初期配置はランダムですが、マップの端から最低でも4マスは離れているものとします。
+
 - The number of paths P is randomly selected between B and B*10. P random paths are then created between a random boundary location and random base.
+経路の数PはBからB*10の間の値からランダムに選択されます。 Pはランダムに選択された基地への経路です
+
 - The number of total creeps Z is randomly selected between 500 and 2000. Z random creeps are created to spawn at specific simulation times at specific boundary points on paths.
+敵の総数Zは500から2000の間からランダムに選択されます。各敵はランダムに選択された経路Pのマップの端から出現します。
+
 - The number of waves W is randomly selected between 1 and 15. W waves of attacking creeps are selected to be spawned at the same boundary location. The wave of creeps will spawn closely together at a random time during the simulation.
+敵の波状攻撃Wは1から15の値を取ります。波状攻撃ではWの数だけ同じ場所から敵が出現します。、波状攻撃のタイミングはランダムです。
+
 - All values are chosen uniformly and independently, at random.
+各選択される値は一様に分布したランダム関数です。
 
 # Notes
 
