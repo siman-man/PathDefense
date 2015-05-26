@@ -1,7 +1,7 @@
 # PathDefense  
 
 You are given a square map containing N by N cells. On the map you have B bases at fixed locations. 
-あなたにN * Nのセルで構成された正方形のマップが与えられます。 マップ場には固定されたB個の基地が存在します。
+あなたにN * Nのセルで構成された正方形のマップが与えられます。 マップ上には固定されたB個の基地が存在します。
 
 A number of P paths lead from the boundary of the map towards your bases. Your bases are under attack and 
 Pはマップの端から基地に向かう経路の数を表します。                               あなたの基地は現在攻撃を受けており、
