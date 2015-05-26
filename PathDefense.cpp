@@ -17,12 +17,13 @@ using namespace std;
 
 typedef long long ll;
 
-const int UNDEFINED   = -1;     // 値が未定義
-const int MAX_N       = 60 + 2; // ボードの最大長(番兵込み)
-const int MAX_Z       = 2015;   // 敵の最大数(実際は2000が最大)
-const int MAX_B       = 10;     // 基地の最大数(実際は8が最大)
-const int MAX_T       = 25;     // タワーの最大数(実際は20が最大)
-const int BASE_HEALTH = 1000;   // 基地の初期体力(1000固定)
+const int UNDEFINED        = -1;     // 値が未定義
+const int MAX_N            = 60 + 2; // ボードの最大長(番兵込み)
+const int MAX_Z            = 2015;   // 敵の最大数(実際は2000が最大)
+const int MAX_B            = 10;     // 基地の最大数(実際は8が最大)
+const int MAX_T            = 25;     // タワーの最大数(実際は20が最大)
+const int BASE_INIT_HEALTH = 1000;   // 基地の初期体力(1000固定)
+const int LIMIT_TURN       = 2000;   // ターンの上限
   
 /*
  * Cellの種別を作成
@@ -46,6 +47,7 @@ typedef struct creep {
   int x;              // x座標
   int created_at;     // 出現時のターン数
   int disappeared_at; // 消失時のターン数
+  int target;         // 狙っている基地
 
   // 初期化
   creep(int id = UNDEFINED, int health = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
@@ -54,6 +56,7 @@ typedef struct creep {
     this->y           = y;
     this->x           = x;
     this->created_at  = UNDEFINED;
+    this->target      = UNDEFINED;
   }
 } CREEP;
 
@@ -67,7 +70,7 @@ typedef struct base {
   // 初期化
   base(int id = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
     this->id     = id;
-    this->health = BASE_HEALTH;
+    this->health = BASE_INIT_HEALTH;
     this->y      = y;
     this->x      = x;
   }
@@ -123,6 +126,9 @@ CREEP g_creepList[MAX_Z];
 // タワーのリスト
 TOWER g_towerList[MAX_T];
 
+// 建設済みのタワーリスト
+TOWER g_buildedTowerList[LIMIT_TURN];
+
 class PathDefense{
   public:
 
@@ -138,10 +144,14 @@ class PathDefense{
       // ボードを全て番兵で初期化
       memset(g_board, GUARD, sizeof(g_board));
 
-      // ターンを初期化
+      // ターンを初期化を行う
       g_currentTurn = 0;
 
+      // ボードの初期化を行う
       initBoardData(board);
+
+      // タワーの初期化を行う
+      initTowerData(towerType);
 
       // 初期の所持金
       g_currentAmountMoney = money;
@@ -196,6 +206,25 @@ class PathDefense{
     }
 
     /*
+     * タワー情報の初期化を行う
+     *   towerType: タワーの情報が格納されている
+     */
+    void initTowerData(vector<int> &towerType){
+      // タワーの種類の数
+      int towerCount = towerType.size() / 3;
+
+      for(int towerId = 0; towerId < towerCount; towerCount++){
+        int range  = towerType[towerId*3];
+        int damage = towerType[towerId*3+1];
+        int cost   = towerType[towerId*3+2];
+
+        TOWER tower = createTower(towerId, range, damage, cost);
+
+        g_towerList[towerId] = tower;
+      }
+    }
+
+    /*
      * 敵を作成する
      *      id: creepのID 
      *  health: 体力
@@ -234,6 +263,15 @@ class PathDefense{
       BASE base(baseId, y, x);
 
       return base;
+    }
+
+    /*
+     * タワーの作成を行う(初期化時のみ使用)
+     */
+    TOWER createTower(int towerId, int range, int damage, int cost){
+      TOWER tower(towerId, range, damage, cost);
+
+      return tower;
     }
 
     /*
@@ -286,10 +324,17 @@ class PathDefense{
 
         CREEP *creep = getCreep(creepId);
 
-        // 各値を更新
-        creep->health = health;
-        creep->y      = y;
-        creep->x      = x;
+        // もしcreated_atが設定されていない場合は新しくcreepを作成する
+        if(creep->created_at == UNDEFINED){
+          CREEP newCreep = createCreep(creepId, health, y, x);
+
+          g_creepList[creepId] = newCreep;
+        }else{
+          // そうでない場合は各値を更新
+          creep->health = health;
+          creep->y      = y;
+          creep->x      = x;
+        }
       }
     }
 
@@ -348,7 +393,7 @@ int main(){
   pd.init(board, money, creepHealth, creepMoney, towerType);
   int nc, b;
 
-  for(int turn = 0; turn < 2000; turn++){
+  for(int turn = 0; turn < LIMIT_TURN; turn++){
     cin >> money;
     cin >> nc;
 
