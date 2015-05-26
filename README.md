@@ -203,7 +203,7 @@ Please look at the visualizer source code for more detail about test case genera
 敵の総数Zは500から2000の間からランダムに選択されます。各敵はランダムに選択された経路Pのマップの端から出現します。
 
 - The number of waves W is randomly selected between 1 and 15. W waves of attacking creeps are selected to be spawned at the same boundary location. The wave of creeps will spawn closely together at a random time during the simulation.
-敵の波状攻撃Wは1から15の値を取ります。波状攻撃ではWの数だけ同じ場所から敵が出現します。、波状攻撃のタイミングはランダムです。
+敵の波状攻撃Wは1から15の値を取ります。波状攻撃ではかなり短い間隔で同じ場所から敵が出現します。、波状攻撃の時間はランダムです。
 
 - All values are chosen uniformly and independently, at random.
 各選択される値は一様に分布したランダム関数です。
