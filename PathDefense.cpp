@@ -17,6 +17,25 @@ using namespace std;
 
 typedef long long ll;
 
+const int UNDEFINED = -1; // 値が未定義
+
+const int MAX_N = 60 + 2; // ボードの最大長(番兵込み)
+
+// 敵を表す構造体
+typedef struct enemy {
+  int health;     // 体力
+  int money;      // 倒した時に得られる報酬
+
+  enemy(int health = UNDEFINED, int money = UNDEFINED){
+    this->health = health;
+    this->money  = money;
+  }
+} ENEMY;
+
+
+// ゲーム・ボード
+int g_board[MAX_N][MAX_N];
+
 class PathDefense{
   public:
 

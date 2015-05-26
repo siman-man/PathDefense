@@ -211,6 +211,63 @@ Please look at the visualizer source code for more detail about test case genera
 # Notes
 
 - The time limit is 20 seconds per test case (this includes only the time spent in your code). The memory limit is 1024 megabytes.
+各テストケースの実行時間は20秒です。またメモリの使用上限は1GBです。
+
 - There is no explicit code size limit. The implicit source code size limit is around 1 MB (it is not advisable to submit codes of size close to that or larger). Once your code is compiled, the binary size should not exceed 1 MB.
+コードのサイズ上限はハッキリとは示しませんが、1MBの周辺が上限となります。
+
 - The compilation time limit is 30 seconds. You can find information about compilers that we use and compilation options here.
+コンパイルの制限時間は30秒です。コンパイルオプションはここから閲覧することができます。
+
 - There are 10 example test cases and 50 full submission (provisional) test cases.
+Example Testでは10ケース、Full Submissionでは50ケースでテストを行います。
+
+
+# 今回意識すること
+
+- 今回はローカルのテストのシード値を1001-1100で行う
+  - 本番テストでスコア下がっても気にしない
+
+# 欲しい機能
+
+## 敵の総数を予測
+
+敵の総数を予測することで建設したほうが得かそうでないかを判断する
+
+
+## 建設するにあたって効率の良い場所
+
+効率よくタワーを立てることで敵の侵入を防ぐ
+
+### 効率の良い場所とは
+
+- 経路を多くカバー出来る場所
+
+## 各出現ポイントから各基地への経路予測
+
+- testerのソースコードを読んで敵の経路生成部分を把握する。
+
+# 知りたいこと
+
+## 敵は最短の基地を狙うのかどうか
+
+
+## スコアの最大値について
+
+### 初期スコア
+
+- 基地の体力は1000
+- 初期資金は「建設可能なタワーのコストの合計値」
+
+なので
+
+1000 * 基地の数 + 初期資金
+
+となる。
+
+ここからまず
+
+- 基地の体力は増えることは無い
+- 初期資金は増える
+
+ことを前提に
