@@ -21,6 +21,7 @@ const int UNDEFINED   = -1;     // 値が未定義
 const int MAX_N       = 60 + 2; // ボードの最大長(番兵込み)
 const int MAX_Z       = 2015;   // 敵の最大数(実際は2000が最大)
 const int MAX_B       = 10;     // 基地の最大数(実際は8が最大)
+const int MAX_T       = 25;     // タワーの最大数(実際は20が最大)
 const int BASE_HEALTH = 1000;   // 基地の初期体力(1000固定)
   
 /*
@@ -39,17 +40,20 @@ enum CellType{
 
 // 敵を表す構造体
 typedef struct creep {
-  int id;         // ID
-  int health;     // 体力
-  int y;          // y座標
-  int x;          // x座標
+  int id;             // ID
+  int health;         // 体力
+  int y;              // y座標
+  int x;              // x座標
+  int created_at;     // 出現時のターン数
+  int disappeared_at; // 消失時のターン数
 
   // 初期化
   creep(int id = UNDEFINED, int health = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
-    this->id     = id;
-    this->health = health;
-    this->y      = y;
-    this->x      = x;
+    this->id          = id;
+    this->health      = health;
+    this->y           = y;
+    this->x           = x;
+    this->created_at  = UNDEFINED;
   }
 } CREEP;
 
@@ -68,6 +72,21 @@ typedef struct base {
     this->x      = x;
   }
 } BASE;
+
+// タワーを表す構造体
+typedef struct tower {
+  int id;       // ID
+  int range;    // 射程距離
+  int damage;   // 攻撃力
+  int cost;     // 建設コスト
+
+  tower(int id = UNDEFINED, int range = UNDEFINED, int damage = UNDEFINED, int cost = UNDEFINED){
+    this->id      = id;
+    this->range   = range;
+    this->damage  = damage;
+    this->cost    = cost;
+  }
+} TOWER;
 
 // 文字を数値に変える関数
 int char2int(char ch){
@@ -101,10 +120,19 @@ BASE g_baseList[MAX_B];
 // 敵のリスト
 CREEP g_creepList[MAX_Z];
 
+// タワーのリスト
+TOWER g_towerList[MAX_T];
+
 class PathDefense{
   public:
 
-    // Initialize method
+    /*
+     * 初期化関数
+     *         board: ボード情報
+     *         money: 初期所持金
+     *   creepHealth: 敵の初期体力(500ターン後は2倍)
+     *    creepMoney: 敵を倒した時に得られるお金
+     */
     int init(vector<string> board, int money, int creepHealth, int creepMoney, vector<int> towerType){
       fprintf(stderr,"init =>\n");
       // ボードを全て番兵で初期化
@@ -113,6 +141,25 @@ class PathDefense{
       // ターンを初期化
       g_currentTurn = 0;
 
+      initBoardData(board);
+
+      // 初期の所持金
+      g_currentAmountMoney = money;
+
+      // 報酬の初期化
+      g_reward = creepMoney;
+
+      // 敵の初期体力の初期化
+      g_creepHealth = creepHealth;
+      
+      return 0;
+    }
+
+    /*
+     * ボードの初期化
+     *   board: 初期ボード
+     */
+    void initBoardData(vector<string> &board){
       // ボードの縦幅を取得
       g_boardHeight = board.size();
 
@@ -146,14 +193,6 @@ class PathDefense{
           }
         }
       }
-
-      // 報酬の初期化
-      g_reward = money; 
-
-      // 敵の初期体力の初期化
-      g_creepHealth = creepHealth;
-      
-      return 0;
     }
 
     /*
@@ -175,6 +214,8 @@ class PathDefense{
         creep.health *= 2;
       }
       
+      // 現在のターン時に出現したことを記録
+      creep.created_at = g_currentTurn;
 
       return creep;
     }
@@ -270,6 +311,9 @@ class PathDefense{
 
     vector<int> placeTowers(vector<int> creeps, int money, vector<int> baseHealth){
       vector<int> ret;
+
+      // ゲーム情報の更新
+      updateBoardData(creeps, money, baseHealth);
 
       return ret;
     }
