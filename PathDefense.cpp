@@ -182,6 +182,7 @@ class PathDefense{
      *   board: 初期ボード
      */
     void initBoardData(vector<string> &board){
+      fprintf(stderr,"initBoardData =>\n");
       // ボードの縦幅を取得
       g_boardHeight = board.size();
 
@@ -225,7 +226,9 @@ class PathDefense{
       // タワーの種類の数
       int towerCount = towerType.size() / 3;
 
-      for(int towerId = 0; towerId < towerCount; towerCount++){
+      fprintf(stderr,"towerCount = %d\n", towerCount);
+
+      for(int towerId = 0; towerId < towerCount; towerId++){
         int range  = towerType[towerId*3];
         int damage = towerType[towerId*3+1];
         int cost   = towerType[towerId*3+2];
@@ -233,6 +236,8 @@ class PathDefense{
         TOWER tower = createTower(towerId, range, damage, cost);
 
         g_towerList[towerId] = tower;
+
+        showTowerData(towerId);
       }
     }
 
@@ -284,6 +289,18 @@ class PathDefense{
       TOWER tower(towerId, range, damage, cost);
 
       return tower;
+    }
+
+    /*
+     * タワー情報の表示
+     *   towerId: タワーID
+     */
+    void showTowerData(int towerId){
+      TOWER tower = getTower(towerId);
+
+      double value = tower.range * tower.damage / (double)tower.cost;
+      fprintf(stderr,"towerId = %d, range = %d, damage = %d, cost = %d, value = %4.2f\n", 
+          towerId, tower.range, tower.damage, tower.cost, value);
     }
 
     /*
@@ -429,6 +446,7 @@ int main(){
   int nc, b;
 
   for(int turn = 0; turn < LIMIT_TURN; turn++){
+    fprintf(stderr,"turn = %d\n", turn);
     cin >> money;
     cin >> nc;
 

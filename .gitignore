@@ -30,3 +30,4 @@
 # dust file
 *.swp
 PathDefense
+.DS_Store
