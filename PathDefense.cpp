@@ -439,6 +439,19 @@ class PathDefense{
     }
 
     /*
+     * マップの中にいるかどうかをチェック
+     *   - 入力
+     *     y: Y座標
+     *     x: X座標
+     *   - 返り値
+     *     true: マップ内
+     *    false: マップ外
+     */
+    bool isInsideMap(int y, int x){
+      return (y >= 0 && x >= 0 && y < g_boardHeight && x < g_boardWidth); 
+    }
+
+    /*
      * 画面外に出ていないかをチェック
      *   - 入力
      *     y: Y座標
@@ -514,7 +527,8 @@ class PathDefense{
 
     /*
      * 基地情報の更新を行う
-     *   baseHealth: 基地の体力情報のリスト
+     *   - 入力
+     *     baseHealth: 基地の体力情報のリスト
      */
     void updateBasesData(vector<int> &baseHealth){
       // 基地の数
@@ -587,7 +601,6 @@ class PathDefense{
     }
 
     /* 
-     * [not yet]
      *   ある地点からどれだけ経路をカバーできるかを計算
      *   - 入力
      *     fromY: 出発地点のY座標
@@ -603,6 +616,7 @@ class PathDefense{
       que.push(COORD(fromY, fromX, 0));
       map<int, bool> checkList;
 
+      // 座標情報が無くなるまで繰り返す
       while(!que.empty()){
         COORD coord = que.front(); que.pop();
 
@@ -611,6 +625,15 @@ class PathDefense{
           coverdCellCount += 1;
 
           // 上下左右のセルを追加
+          for(int i = 0; i < 4; i++){
+            int ny = coord.y + DY[i];
+            int nx = coord.x + DX[i];
+
+            // もし画面外で無い場合はキューに追加
+            if(isInsideMap(ny, nx)){
+              que.push(COORD(ny, nx));
+            }
+          }
         }
       }
 
