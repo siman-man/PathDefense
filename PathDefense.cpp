@@ -601,7 +601,7 @@ class PathDefense{
     }
 
     /* 
-     *   ある地点からどれだけ経路をカバーできるかを計算
+     *   ある地点からどれだけの経路をカバーできるかを計算
      *   - 入力
      *     fromY: 出発地点のY座標
      *     fromX: 出発地点のX座標
@@ -620,9 +620,18 @@ class PathDefense{
       while(!que.empty()){
         COORD coord = que.front(); que.pop();
 
-        // もし距離が攻撃範囲であればカバーしている数を増やす
+        // 調査済みの座標であれば処理を飛ばす
+        if(checkList[coord.y*g_boardHeight+coord.x]) continue;
+        checkList[coord.y*g_boardHeight+coord.x] = true;
+
+        // もし距離が攻撃範囲であれば処理を続ける
         if(calcRoughDist(fromY, fromX, coord.y, coord.x) <= range * range){
-          coverdCellCount += 1;
+          CELL *cell = getCell(coord.y, coord.x);
+
+          // もしセルの種別が平地であればカバーする範囲を増やす
+          if(cell->type == PLAIN){
+            coverdCellCount += 1;
+          }
 
           // 上下左右のセルを追加
           for(int i = 0; i < 4; i++){
