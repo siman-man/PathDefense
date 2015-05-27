@@ -198,10 +198,11 @@ class PathDefense{
 
     /*
      * 初期化関数
-     *         board: ボード情報
-     *         money: 初期所持金
-     *   creepHealth: 敵の初期体力(500ターン毎に倍々で増える)
-     *    creepMoney: 敵を倒した時に得られるお金
+     *   - 入力
+     *           board: ボード情報
+     *           money: 初期所持金
+     *     creepHealth: 敵の初期体力(500ターン毎に倍々で増える)
+     *      creepMoney: 敵を倒した時に得られるお金
      */
     int init(vector<string> board, int money, int creepHealth, int creepMoney, vector<int> towerType){
       fprintf(stderr,"init =>\n");
@@ -232,7 +233,8 @@ class PathDefense{
 
     /*
      * ボードの初期化
-     *   board: 初期ボード
+     *   - 入力
+     *     board: 初期ボード
      */
     void initBoardData(vector<string> &board){
       fprintf(stderr,"initBoardData =>\n");
@@ -281,7 +283,8 @@ class PathDefense{
 
     /*
      * タワー情報の初期化を行う
-     *   towerType: タワーの情報が格納されている
+     *   - 入力
+     *     towerType: タワーの情報が格納されているリスト
      */
     void initTowerData(vector<int> &towerType){
       // タワーの種類の数
@@ -321,13 +324,14 @@ class PathDefense{
 
     /*
      * 敵を作成する
-     *      id: creepのID 
-     *  health: 体力
-     *       y: 敵のy座標
-     *       x: 敵のx座標
+     *   - 入力
+     *         id: creepのID 
+     *     health: 体力
+     *          y: 敵のy座標
+     *          x: 敵のx座標
      *
-     * 返り値
-     *   CREEP
+     *   - 返り値
+     *     CREEP
      */
     CREEP createCreep(int id, int health, int y, int x){
       // 敵のインスタンスを作成
@@ -344,12 +348,13 @@ class PathDefense{
 
     /*
      * 基地を作成する
-     *   id: baseのID
-     *    y: 基地のy座標
-     *    x: 基地のx座標
+     *   - 入力
+     *     id: baseのID
+     *      y: 基地のY座標
+     *      x: 基地のX座標
      *
-     * 返り値
-     *   BASE
+     *   - 返り値
+     *     BASE
      */
     BASE createBase(int baseId, int y, int x){
       // 基地のインスタンスを作成
@@ -360,10 +365,11 @@ class PathDefense{
 
     /*
      * タワーの作成を行う(初期化時のみ使用)
-     *   towerId: タワーのID
-     *     range: 攻撃範囲
-     *    damage: 攻撃力
-     *      cost: 建設コスト
+     *   - 入力
+     *     towerId: タワーのID
+     *       range: 攻撃範囲
+     *      damage: 攻撃力
+     *        cost: 建設コスト
      */
     TOWER createTower(int towerId, int range, int damage, int cost){
       TOWER tower(towerId, range, damage, cost);
@@ -373,7 +379,8 @@ class PathDefense{
 
     /*
      * タワー情報の表示
-     *   towerId: タワーID
+     *   - 入力
+     *     towerId: タワーID
      */
     void showTowerData(int towerId){
       TOWER tower = getTower(towerId);
@@ -386,9 +393,9 @@ class PathDefense{
     /*
      * タワーの建設を行う(ゲーム中に使用)
      *   - 入力
-     *   towerId: 建設するタワーの種類
-     *         y: 建設を行うy座標
-     *         x: 建設を行うx座標
+     *     towerId: 建設するタワーの種類
+     *           y: 建設を行うY座標
+     *           x: 建設を行うX座標
      */
     void buildTower(int towerId, int y, int x){
       TOWER tower = getTower(towerId);
@@ -412,7 +419,8 @@ class PathDefense{
 
     /*
      * 指定したIDの敵を取得する
-     *   creepId: 敵ID
+     *   - 入力
+     *     creepId: 敵ID
      */
     CREEP* getCreep(int creepId){
       return &g_creepList[creepId];
@@ -420,7 +428,8 @@ class PathDefense{
 
     /*
      * 指定したIDのタワー情報を取得
-     *   towerId: タワーID
+     *   - 入力
+     *     towerId: タワーID
      */
     TOWER getTower(int towerId){
       return g_towerList[towerId];
@@ -432,7 +441,7 @@ class PathDefense{
      *     y: Y座標
      *     x: x座標
      *   - 返り値
-     *     セル情報のぽいんた　
+     *     セル情報のポインタ
      */
     CELL* getCell(int y, int x){
       return &g_board[y][x];
@@ -496,7 +505,8 @@ class PathDefense{
 
     /*
      * 敵情報の更新
-     *   creeps: 敵の情報リスト
+     *   - 入力
+     *     creeps: 敵の情報リスト
      */
     void updateCreepsData(vector<int> &creeps){
       // 敵の数
@@ -554,10 +564,10 @@ class PathDefense{
     /*
      * ある地点から生存中の敵で一番近い敵のIDを返す
      *   - 入力
-     *    fromY: 出発地点のy座標
-     *    fromX: 出発地点のx座標
+     *     fromY: 出発地点のy座標
+     *     fromX: 出発地点のx座標
      *   - 返り値
-     *    mostNearCreepId: 一番近い敵のID
+     *     mostNearCreepId: 一番近い敵のID
      */
     int searchMostNearCreepId(int fromY, int fromX){
       int mostNearCreepId = UNDEFINED;
