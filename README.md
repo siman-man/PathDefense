@@ -1,7 +1,7 @@
 # PathDefense  
 
 You are given a square map containing N by N cells. On the map you have B bases at fixed locations. 
-あなたにN * Nのセルで構成された正方形のマップが与えられます。 マップ上には固定されたB個の基地が存在します。
+あなたはN * Nのセルで構成された正方形のマップが与えられます。 マップ上には固定されたB個の基地が存在します。
 
 A number of P paths lead from the boundary of the map towards your bases. Your bases are under attack and 
 Pはマップの端から基地に向かう経路の数を表します。                               あなたの基地は現在攻撃を受けており、
@@ -53,7 +53,7 @@ moneyはシミュレーション開始時にあなたが使用できる資金の
 - creepHealth 
 gives you the amount of health points a creep will initially spawn with. 
 Note that after every 500 simulation steps, the starting health of newly spawned creeps will double.
-侵略者の初期体力です。500ターン以降に出現する侵略者の体力は2倍になります。
+侵略者の初期体力です。500ターン毎に出現する侵略者の体力は倍々に増えていきます。
 
 - creepMoney
 gives you the amount of money received for killing a creep.
@@ -271,3 +271,20 @@ Example Testでは10ケース、Full Submissionでは50ケースでテストを�
 - 初期資金は増える
 
 ことを前提に
+
+# ソースコード読み
+
+- 基地への経路は最低でも1つは作成される。残りはランダムに作成
+  - やたら狙われる基地が存在するかも
+
+- 敵の行動パターンはちょっと改良されたランダム・ウォーク
+  - 前回行動したマスに行動しないが追加されているぐらい
+  - 到達しやすい基地が存在する可能性
+  - 中央にある基地には到達しにくそう（イメージ的に)
+
+- 敵の体力は500ターン毎に倍々で増えていく(勘違いしてた...)
+  -    0 -  499: 1倍
+  -  500 -  999: 2倍
+  - 1000 - 1499: 4倍
+  - 1500 - 1999: 8倍
+  - なので敵の最大HPは160まで増加する可能性が

@@ -255,10 +255,8 @@ class PathDefense{
       // 敵のインスタンスを作成
       CREEP creep(id, health, y, x);
 
-      // もし500ターンを超えていた場合は2倍する
-      if(g_currentTurn >= 500){
-        creep.health *= 2;
-      }
+      // もし500ターン毎に体力が倍々に増える
+      creep.health *= 1 * (g_currentTurn/500);
       
       // 現在のターン時に出現したことを記録
       creep.created_at = g_currentTurn;

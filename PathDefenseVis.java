@@ -41,7 +41,9 @@ class CreepType {
     int health;
     int money;
     public CreepType(Random rnd) {
+        // 敵の体力をランダムに設定
         health = rnd.nextInt(MAX_CREEP_HEALTH - MIN_CREEP_HEALTH + 1) + MIN_CREEP_HEALTH;
+        // 敵の報酬をランダムに設定
         money = rnd.nextInt(MAX_CREEP_MONEY - MIN_CREEP_MONEY + 1) + MIN_CREEP_MONEY;
     }
 }
@@ -65,8 +67,11 @@ class TowerType {
     int damage;
     int cost;
     public TowerType(Random rnd) {
+        // 攻撃範囲をランダムに設定
         range = rnd.nextInt(MAX_TOWER_RANGE - MIN_TOWER_RANGE + 1) + MIN_TOWER_RANGE;
+        // 攻撃力をランダムに設定
         damage = rnd.nextInt(MAX_TOWER_DAMAGE - MIN_TOWER_DAMAGE + 1) + MIN_TOWER_DAMAGE;
+        // 建設コストをランダムに設定
         cost = rnd.nextInt(MAX_TOWER_COST - MIN_TOWER_COST + 1) + MIN_TOWER_COST;
     }
 
@@ -123,18 +128,28 @@ class TestCase {
 
     public SecureRandom rnd = null;
 
+    // 出現ポイントと基地の接続を行う
+    //   x1: 出現ポイントのx座標
+    //   y1: 出現ポイントのy座標
+    //   x2: 基地のx座標
+    //   y2: 基地のy座標
     public void connect(Random rnd, int x1, int y1, int x2, int y2) {
+        // 目的地に到着するまで処理を続ける
         while (x1!=x2 || y1!=y2) {
+            // 目的地以外の基地についたら抜ける
             if (board[y1][x1]>='0' && board[y1][x1]<='9') return;
+            // 平地を経路に
             board[y1][x1] = '.';
             int x1_ = x1;
             int y1_ = y1;
+            // x座標が一致している場合
             if (x1==x2) {
                 if (y2>y1) {
                     y1++;
                 } else {
                     y1--;
                 }
+            // y座標が一致している場合
             } else if (y1==y2) {
                 if (x2>x1) {
                     x1++;
@@ -146,8 +161,10 @@ class TestCase {
                 int ny = y1;
                 if (x2>x1) nx++; else nx--;
                 if (y2>y1) ny++; else ny--;
+                // すでに経路が存在している場合はそこを優先
                 if (board[ny][x1]=='.') { y1 = ny; }
                 else if (board[y1][nx]=='.') { x1 = nx; }
+                // どちらも平地の場合は50%の確率でどこかに進む
                 else {
                     if (rnd.nextInt(2)==0)
                         y1 = ny;
@@ -155,6 +172,7 @@ class TestCase {
                         x1 = nx;
                 }
             }
+            // 現在のセルからどの方角に行動できるのかをフラグで管理
             if (x1>x1_) boardPath[y1_][x1_] |= 8;
             else if (x1<x1_) boardPath[y1_][x1_] |= 2;
             else if (y1>y1_) boardPath[y1_][x1_] |= 1;
@@ -162,6 +180,7 @@ class TestCase {
         }
     }
 
+    // 経路の追加を行う
     public void addPath(Random rnd, int baseIdx) {
         int sx=0,sy=0;
         boolean nextTo = false;
@@ -171,20 +190,28 @@ class TestCase {
             tryEdge++;
             if (tryEdge>boardSize) break;
             nextTo = false;
+            // sxをランダムに設定
             sx = rnd.nextInt(boardSize-1)+1;
+            // 50%の確率で↑
             if (rnd.nextInt(2)==0) {
+                // syを0かboardSize-1に設定
                 sy = rnd.nextInt(2)*(boardSize-1);
                 if (sx>0 && board[sy][sx-1]=='.') nextTo = true;
                 if (sx+1<boardSize && board[sy][sx+1]=='.') nextTo = true;
             } else
             {
+                // y座標とx座標を入替え
                 sy = sx;
                 sx = rnd.nextInt(2)*(boardSize-1);
                 if (sy>0 && board[sy-1][sx]=='.') nextTo = true;
                 if (sy+1<boardSize && board[sy+1][sx]=='.') nextTo = true;
             }
         } while (nextTo || board[sy][sx]!='#');
+
+        // 経路長がボードの長さを超えていたら何もしない
         if (tryEdge>boardSize) return;
+
+        // 出現ポイントを作成
         board[sy][sx] = '.';
         spawnX[baseIdx] = sx;
         spawnY[baseIdx] = sy;
@@ -193,6 +220,7 @@ class TestCase {
         else if (sx==boardSize-1) { boardPath[sy][sx] |= 2; sx--; }
         else { boardPath[sy][sx] |= 4; sy--; }
         int b = baseIdx%baseCnt;
+        // 最低でも1つの基地に向かう経路は作成して、あとはランダムで作る
         if (baseIdx>=baseCnt) b = rnd.nextInt(baseCnt);
         connect(rnd, sx, sy, baseX[b], baseY[b]);
     }
@@ -200,29 +228,43 @@ class TestCase {
     public TestCase(long seed) {
 
         try {
+            // 新しい乱数の生成
             rnd = SecureRandom.getInstance("SHA1PRNG");
         } catch (Exception e) {
             System.err.println("ERROR: unable to generate test case.");
             System.exit(1);
         }
 
+        // シード値の設定を行う
         rnd.setSeed(seed);
         boolean genDone = true;
+        // もし基地に到達できない敵が1体でもいたらフィールドを作成し直す
         do {
+            // ボードサイズをランダムに設定
             boardSize = rnd.nextInt(MAX_BOARD_SIZE - MIN_BOARD_SIZE + 1) + MIN_BOARD_SIZE;
+            // シードが1の場合は20固定
             if (seed==1) boardSize = 20;
+            // ボードを作成
             board = new char[boardSize][boardSize];
+            // ボードの経路を作成
             boardPath = new int[boardSize][boardSize];
+            // 敵のタイプを決定
             creepType = new CreepType(rnd);
 
+            // タワーの種類をランダムに設定
             towerTypeCnt = rnd.nextInt(MAX_TOWER_TYPES - MIN_TOWER_TYPES + 1) + MIN_TOWER_TYPES;
             towerTypes = new TowerType[towerTypeCnt];
+            // 初期の所持金を初期化
             money = 0;
             for (int i = 0; i < towerTypeCnt; i++) {
+                // タワーを作成
                 towerTypes[i] = new TowerType(rnd);
+                // 所持金をタワーのコスト分増やす
                 money += towerTypes[i].cost;
             }
+            // 基地の数を設定
             baseCnt = rnd.nextInt(MAX_BASE_COUNT - MIN_BASE_COUNT + 1) + MIN_BASE_COUNT;
+            // ボードの初期化
             for (int y=0;y<boardSize;y++) {
                 for (int x=0;x<boardSize;x++) {
                     board[y][x] = '#';
@@ -235,45 +277,63 @@ class TestCase {
                 int bx,by;
                 do
                 {
+                    // 基地の位置をランダムに設定(最低でも4マスは離れるようにする)
                     bx = rnd.nextInt(boardSize-8)+4;
                     by = rnd.nextInt(boardSize-8)+4;
+                // 既に基地があるところには設置しない
                 } while (board[by][bx]!='#');
+                // ボードに基地の位置を設定
                 board[by][bx] = (char)('0'+i);
+                // 位置情報の設定
                 baseX[i] = bx;
                 baseY[i] = by;
             }
 
+            // 経路の数をランダムに設定
             pathCnt = rnd.nextInt(baseCnt*10 - baseCnt + 1) + baseCnt;
+            // 出現ポイント
             spawnX = new int[pathCnt];
             spawnY = new int[pathCnt];
+            // 経路の数だけ新しく経路を生成する
             for (int i=0;i<pathCnt;i++) {
                 addPath(rnd, i);
             }
 
+            // 敵の総数を決定
             creepCnt = rnd.nextInt(MAX_CREEP_COUNT - MIN_CREEP_COUNT + 1) + MIN_CREEP_COUNT;
             if (seed==1) creepCnt = MIN_CREEP_COUNT;
             creeps = new Creep[creepCnt];
+            // それぞれの敵情報を作成
             for (int i=0;i<creepCnt;i++) {
                 Creep c = new Creep();
                 int j = rnd.nextInt(pathCnt);
+                // 出現座標を決定
                 c.x = spawnX[j];
                 c.y = spawnY[j];
                 c.id = i;
+                // 出現時間の設定
                 c.spawnTime = rnd.nextInt(Constants.SIMULATION_TIME);
+                // 体力の設定、500ターン毎に倍々で増えていく
                 c.health = creepType.health * (1<<(c.spawnTime/500));
                 creeps[i] = c;
             }
             // waves
+            // 波状攻撃の回数を設定
             waveCnt = rnd.nextInt(MAX_WAVE_COUNT - MIN_WAVE_COUNT + 1) + MIN_WAVE_COUNT;
             int wi = 0;
             for (int w=0;w<waveCnt;w++) {
+                // 出現ポイントをランダムで設定
                 int wavePath = rnd.nextInt(pathCnt);
+                // 波状攻撃を行う敵の数を設定(最低5,最大5+敵の総数/20-1)
                 int waveSize = 5+rnd.nextInt(creepCnt/20);
+                // 波状攻撃の始まる時間を設定
                 int waveStartT = rnd.nextInt(Constants.SIMULATION_TIME-waveSize);
                 for (int i=0;i<waveSize;i++) {
+                    // 敵の総数を超えたら終了
                     if (wi>=creepCnt) break;
                     creeps[wi].x = spawnX[wavePath];
                     creeps[wi].y = spawnY[wavePath];
+                    // 出現するタイミングをランダムで設定
                     creeps[wi].spawnTime = waveStartT + rnd.nextInt(waveSize);
                     creeps[wi].health = creepType.health * (1<<(creeps[wi].spawnTime/500));
                     wi++;
@@ -282,14 +342,17 @@ class TestCase {
             }
 
             // determine paths for each creep
+            // 敵の経路を生成
             genDone = true;
             for (Creep c :creeps) {
+                // 経路をクリア
                 c.moves.clear();
                 int x = c.x;
                 int y = c.y;
                 int prevx = -1;
                 int prevy = -1;
                 int tryPath = 0;
+                // 基地に到達するまで繰り返す
                 while (!(board[y][x]>='0' && board[y][x]<='9')) {
                     int dir = 0;
                     tryPath++;
@@ -298,15 +361,23 @@ class TestCase {
                     int tryDir = 0;
                     do
                     {
+                        // 4方向全てためしたら-1にリセット
                         if (tryDir==15) { tryDir = -1; break; }
+                        // ランダムで方向を決定する
                         dir = rnd.nextInt(4);
                         tryDir |= (1<<dir);
+                        // 行動できない場所
                     } while ((boardPath[y][x]&(1<<dir))==0 ||
+                                // 前回行動したマスであれば繰り返す
                               (x+Constants.DX[dir]==prevx && y+Constants.DY[dir]==prevy));
+                    // 4方向全て試した場合はそのまま終了
                     if (tryDir<0) break;
+                    // 方向を設定
                     c.moves.add(dir);
+                    // 前の行動履歴を保存
                     prevx = x;
                     prevy = y;
+                    // 位置情報の更新
                     x += Constants.DX[dir];
                     y += Constants.DY[dir];
                 }
