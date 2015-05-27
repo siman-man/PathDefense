@@ -1,3 +1,9 @@
+/*
+ * @file    PathDefense.cpp
+ * @brief   PathDefenseを解く用の何か
+ * @author  siman
+ * @date    2015/05/28
+ */
 #include <iostream>
 #include <vector>
 #include <map>
@@ -22,32 +28,37 @@ const int MAX_N            = 60 + 2; // ボードの最大長(番兵込み)
 const int MAX_Z            = 2015;   // 敵の最大数(実際は2000が最大)
 const int MAX_B            = 10;     // 基地の最大数(実際は8が最大)
 const int MAX_T            = 25;     // タワーの最大数(実際は20が最大)
+const int MAX_R            = 5;      // 攻撃範囲の最大値
 const int BASE_INIT_HEALTH = 1000;   // 基地の初期体力(1000固定)
 const int LIMIT_TURN       = 2000;   // ターンの上限
 
 /*
  * それぞれの方角と数値の対応
  *
- *         0
- *         ↑
- *     3 ←   → 1
- *         ↓
  *         2
+ *         ↑
+ *     1 ←   → 3
+ *         ↓
+ *         0
  */
-const int DY[4] = { -1, 0, 1, 0 };
-const int DX[4] = {  0, 1, 0, -1};
+const int DY[4] = { 1, 0, -1, 0 };
+const int DX[4] = {  0, -1, 0, 1};
   
 /*
+ * @enum Enum 
  * Cellの種別を作成
- *  0: 番兵(GUARD)
- *  1: 経路(PATH)
- *  2: 拠点(BASE_POINT)
- *  3: 平地(PLAIN)
  */
 enum CellType{
+  //! 番兵(GUARD)
   GUARD,
+
+  //! 経路(PATH)
   PATH,
+
+  //! 拠点(BASE_POINT)
   BASE_POINT,
+
+  //! 平地(PLAIN)
   PLAIN
 };
 
@@ -55,8 +66,8 @@ enum CellType{
  * 座標を表す構造体
  */
 typedef struct coord {
-  int y;      // y座標
-  int x;      // x座標
+  int y;      // Y座標
+  int x;      // X座標
   int dist;   // 幅優先で使用する
 
   coord(int y = UNDEFINED, int x = UNDEFINED, int dist = UNDEFINED){
@@ -65,6 +76,21 @@ typedef struct coord {
     this->dist = dist;
   }
 } COORD;
+
+/*
+ * スポーン地点を表す構造体
+ */
+typedef struct spawnPoint {
+  int id;     // ID
+  int y;      // Y座標
+  int x;      // X座標
+
+  spawnPoint(int id = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
+    this->id = id;
+    this->y  = y;
+    this->x  = x;
+  }
+} SPAWN_POINT;
 
 // 敵を表す構造体
 typedef struct creep {
@@ -126,8 +152,9 @@ typedef struct tower {
 
 // マップの各要素を表す構造体
 typedef struct cell {
-  int type;     // Cellのタイプ
-  int damage;   // この場所で与えられる最大ダメージ
+  int type;                   // Cellのタイプ
+  int damage;                 // この場所で与えられる最大ダメージ
+  int coveredCount[MAX_R+1];  // カバーできる経路の数
 
   cell(int type = UNDEFINED){
     this->type = type;
@@ -145,6 +172,11 @@ int char2int(char ch){
   return ch - '0';
 }
 
+/*
+ * (y,x)を1次元に直した場合の値を出す
+ *   - 入力
+ */
+
 
 /*
  * 2点間の大雑把な距離を計算
@@ -158,46 +190,52 @@ int calcRoughDist(int fromY, int fromX, int destY, int destX){
   return (fromY-destY) * (fromY-destY) + (fromX-destX) * (fromX-destX);
 }
 
-// 現在のターン
+//! 現在のターン
 int g_currentTurn;
 
-// ボード
+//! ボード
 CELL g_board[MAX_N][MAX_N];
 
-// 現在の所持金
+//! 現在の所持金の合計
 int g_currentAmountMoney;
 
-// 敵を倒すと貰える報酬
+//! 敵を倒すと貰える報酬
 int g_reward;
 
-// 敵の初期体力
+//! 敵の初期体力
 int g_creepHealth;
 
-// ボードの横幅
+//! ボードの横幅
 int g_boardWidth;
 
-// ボードの縦幅
+//! ボードの縦幅
 int g_boardHeight;
 
-// 基地のリスト
+//! 最短路を得るためのマップ
+int g_shortPathMap[MAX_N][MAX_N][MAX_B*10+1][MAX_B+1];
+
+//! 基地のリスト
 BASE g_baseList[MAX_B];
 
-// 敵のリスト
+//! 敵のリスト
 CREEP g_creepList[MAX_Z];
 
-// 生存中の敵のIDリスト
+//! 生存中の敵のIDリスト
 set<int> g_aliveCreepIdList;
 
-// タワーのリスト
+//! タワーのリスト
 TOWER g_towerList[MAX_T];
 
-// 建設済みのタワーリスト
+//! 建設済みのタワーリスト
 vector<TOWER> g_buildedTowerList;
 
-// 出現ポイントのリスト
-vector<COORD> g_spawnPointList;
+//! 出現ポイントのリスト
+vector<SPAWN_POINT> g_spawnPointList;
 
-// 建設したタワーの数
+//! 前に行動したstepを覚える配列
+int g_prevStep[MAX_N][MAX_N];
+
+//! 建設したタワーの数
 int g_buildedTowerCount;
 
 class PathDefense{
@@ -223,6 +261,9 @@ class PathDefense{
       // タワーの初期化を行う
       initTowerData(towerType);
 
+      // カバーできる経路の数を計算
+      initCoveredCellCount();
+
       // 初期の所持金
       g_currentAmountMoney = money;
 
@@ -234,8 +275,22 @@ class PathDefense{
 
       // 敵の初期体力の初期化
       g_creepHealth = creepHealth;
+
+      showGameData();
       
       return 0;
+    }
+
+    /*
+     * ゲームの基礎情報を表示
+     *   - 敵の基礎体力
+     *   - 敵を倒した時の報酬
+     */
+    void showGameData(){
+      fprintf(stderr,"-----------------------------------------------\n");
+      fprintf(stderr,"creepHealth = %d\n", g_creepHealth);
+      fprintf(stderr,"reward = %d\n", g_reward);
+      fprintf(stderr,"-----------------------------------------------\n");
     }
 
     /*
@@ -265,8 +320,8 @@ class PathDefense{
             cell.type = PATH;
             // マップの端であればスポーン地点の追加を行う
             if(y == 0 || x == 0 || y == g_boardHeight-1 || x == g_boardWidth-1){
-              COORD coord(y, x);
-              g_spawnPointList.push_back(coord);
+              // スポーン地点の追加
+              addSpawnPoint(y, x);
             }
 
           // それ以外は基地
@@ -284,6 +339,22 @@ class PathDefense{
 
           // セルを代入
           g_board[y][x] = cell;
+        }
+      }
+    }
+
+    /*
+     * カバー出来る経路の数を再計算
+     */
+    void initCoveredCellCount(){
+      for(int y = 0; y < g_boardHeight; y++){
+        for(int x = 0; x < g_boardWidth; x++){
+          CELL *cell = getCell(y,x);
+
+          for(int range = 1; range <= MAX_R; range++){
+            int coveredCount = calcCoveredCellCount(y, x, range);
+            cell->coveredCount[range] = coveredCount;
+          }
         }
       }
     }
@@ -316,12 +387,37 @@ class PathDefense{
      * [not yet]
      *   各出現ポイントから基地までの最短経路を計算
      */
-    void initSpawnToBaseShortPath(){
+    void initSpawnToBaseShortestPath(){
+      int spawnCount = g_spawnPointList.size();
+
+      // スポーン地点毎に処理を行う
+      for(int spawnId = 0; spawnId < spawnCount; spawnId++){
+        SPAWN_POINT *spawnPoint = getSpawnPoint(spawnId);
+      }
     }
 
-    /*
-     * セルの作成
-     *   type: セルのタイプ
+    /**
+     * @fn
+     * 出現ポイントから基地までの最短経路を出す
+     * @param (spawnY) スポーン地点のY座標
+     * @param (spawnX) スポーン地点のX座標
+     * @sa initSpawnToBaseShortestPath
+     */
+    void calcSpawnToBaseShortestPath(int spawnY, int spawnX){
+      map<int, bool> checkList;
+      queue<COORD> que;
+      que.push(COORD(spawnY, spawnX));
+
+      // 前回行動した情報のリセット
+      memset(g_prevStep, -1, sizeof(g_prevStep));
+
+      while(!que.empty()){
+      }
+    }
+
+    /**
+     * @fn
+     * セルの作成を行う
      */
     CELL createCell(){
       CELL cell; 
@@ -329,23 +425,22 @@ class PathDefense{
       return cell;
     }
 
-    /*
+    /**
+     * @fn
      * 敵を作成する
-     *   - 入力
-     *         id: creepのID 
-     *     health: 体力
-     *          y: 敵のy座標
-     *          x: 敵のx座標
+     * @param (creepId) creepのID 
+     * @param (health)  体力
+     * @param (y)       敵のY座標
+     * @param (x)       敵のX座標
      *
-     *   - 返り値
-     *     CREEP
+     * @return CREEP
      */
-    CREEP createCreep(int id, int health, int y, int x){
+    CREEP createCreep(int creepId, int health, int y, int x){
       // 敵のインスタンスを作成
-      CREEP creep(id, health, y, x);
+      CREEP creep(creepId, health, y, x);
 
       // もし500ターン毎に体力が倍々に増える
-      creep.health *= 1 * (g_currentTurn/500);
+      creep.health *= (1 << (g_currentTurn/500));
       
       // 現在のターン時に出現したことを記録
       creep.created_at = g_currentTurn;
@@ -385,6 +480,18 @@ class PathDefense{
     }
 
     /*
+     * スポーン地点の追加を行う
+     */
+    void addSpawnPoint(int y, int x){
+      int spawnId = g_spawnPointList.size();
+
+      SPAWN_POINT spawnPoint(spawnId, y, x);
+      g_spawnPointList.push_back(spawnPoint);
+
+      fprintf(stderr,"Add spwan point: y = %d, x = %d\n", y, x);
+    }
+
+    /*
      * タワー情報の表示
      *   - 入力
      *     towerId: タワーID
@@ -392,7 +499,7 @@ class PathDefense{
     void showTowerData(int towerId){
       TOWER tower = getTower(towerId);
 
-      double value = tower.range * tower.damage / (double)tower.cost;
+      double value = tower.range * (tower.damage*tower.damage) / (double)tower.cost/4.0;
       fprintf(stderr,"towerId = %d, range = %d, damage = %d, cost = %d, value = %4.2f\n", 
           towerId, tower.range, tower.damage, tower.cost, value);
     }
@@ -440,6 +547,17 @@ class PathDefense{
      */
     TOWER getTower(int towerId){
       return g_towerList[towerId];
+    }
+
+    /*
+     * スポーン地点の取得
+     *   - 入力
+     *     spawnId: スポーンID
+     *   - 返り値
+     *     スポーン地点の情報を指すポインタ
+     */
+    SPAWN_POINT* getSpawnPoint(int spawnId){
+      return &g_spawnPointList[spawnId];
     }
 
     /*
@@ -561,13 +679,27 @@ class PathDefense{
       }
     }
 
+    /*
+     * ゲーム中毎回呼ばれる関数
+     *   - 引数
+     *         creeps: 敵の情報リスト
+     *          money: 現在の所持金
+     *     baseHealth: 基地の体力情報
+     *
+     *   - 返り値
+     *     タワーの建設情報
+     */
     vector<int> placeTowers(vector<int> creeps, int money, vector<int> baseHealth){
-      vector<int> ret;
+      vector<int> towerBuildData;
 
       // ゲーム情報の更新
       updateBoardData(creeps, money, baseHealth);
 
-      return ret;
+      // ターンを1増やす
+      g_currentTurn += 1;
+
+      // タワーの建設情報を返して終わり
+      return towerBuildData;
     }
 
     /*
@@ -575,6 +707,7 @@ class PathDefense{
      *   - 入力
      *     fromY: 出発地点のy座標
      *     fromX: 出発地点のx座標
+     *
      *   - 返り値
      *     mostNearCreepId: 一番近い敵のID
      */
@@ -620,16 +753,15 @@ class PathDefense{
     }
 
     /* 
+     *   @fn
      *   ある地点からどれだけの経路をカバーできるかを計算
-     *   - 入力
-     *     fromY: 出発地点のY座標
-     *     fromX: 出発地点のX座標
-     *     range: 攻撃範囲
-     *   - 返り値
-     *     カバーしている経路の数
+     *   @param (fromY) 出発地点のY座標
+     *   @param (fromX) 出発地点のX座標
+     *   @param (range) 攻撃範囲
+     *   @return カバーしている経路の数
      */
-    int calcCoverdCellCount(int fromY, int fromX, int range){
-      int coverdCellCount = 0;
+    int calcCoveredCellCount(int fromY, int fromX, int range){
+      int coveredCellCount = 0;
 
       queue<COORD> que;
       que.push(COORD(fromY, fromX, 0));
@@ -649,7 +781,7 @@ class PathDefense{
 
           // もしセルの種別が平地であればカバーする範囲を増やす
           if(cell->type == PLAIN){
-            coverdCellCount += 1;
+            coveredCellCount += 1;
           }
 
           // 上下左右のセルを追加
@@ -665,7 +797,7 @@ class PathDefense{
         }
       }
 
-      return coverdCellCount;
+      return coveredCellCount;
     }
 };
 
@@ -699,7 +831,7 @@ int main(){
   int nc, b;
 
   for(int turn = 0; turn < LIMIT_TURN; turn++){
-    fprintf(stderr,"turn = %d\n", turn);
+    //fprintf(stderr,"turn = %d\n", turn);
     cin >> money;
     cin >> nc;
 
