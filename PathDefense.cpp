@@ -24,6 +24,18 @@ const int MAX_B            = 10;     // 基地の最大数(実際は8が最大)
 const int MAX_T            = 25;     // タワーの最大数(実際は20が最大)
 const int BASE_INIT_HEALTH = 1000;   // 基地の初期体力(1000固定)
 const int LIMIT_TURN       = 2000;   // ターンの上限
+
+/*
+ * それぞれの方角と数値の対応
+ *
+ *         0
+ *         ↑
+ *     3 ←   → 1
+ *         ↓
+ *         2
+ */
+const int DY[4] = { -1, 0, 1, 0 };
+const int DX[4] = {  0, 1, 0, -1};
   
 /*
  * Cellの種別を作成
@@ -38,6 +50,21 @@ enum CellType{
   BASE_POINT,
   PLAIN
 };
+
+/*
+ * 座標を表す構造体
+ */
+typedef struct coord {
+  int y;      // y座標
+  int x;      // x座標
+  int dist;   // 幅優先で使用する
+
+  coord(int y = UNDEFINED, int x = UNDEFINED, int dist = UNDEFINED){
+    this->y = y;
+    this->x = x;
+    this->dist = dist;
+  }
+} COORD;
 
 // 敵を表す構造体
 typedef struct creep {
@@ -97,16 +124,38 @@ typedef struct tower {
   }
 } TOWER;
 
+// マップの各要素を表す構造体
+typedef struct cell {
+  int type;     // Cellのタイプ
+  int damage;   // この場所で与えられる最大ダメージ
+
+  cell(int type = UNDEFINED){
+    this->type = type;
+  }
+} CELL;
+
 // 文字を数値に変える関数
 int char2int(char ch){
   return ch - '0';
+}
+
+
+/*
+ * 2点間の大雑把な距離を計算
+ *   fromY: 出発地点のy座標
+ *   fromX: 出発地点のx座標
+ *   destY: 目標地点のy座標
+ *   destX: 目標地点のx座標
+ */
+int calcRoughDist(int fromY, int fromX, int destY, int destX){
+  return (fromY-destY) * (fromY-destY) + (fromX-destX) * (fromX-destX);
 }
 
 // 現在のターン
 int g_currentTurn;
 
 // ボード
-int g_board[MAX_N][MAX_N];
+CELL g_board[MAX_N][MAX_N];
 
 // 現在の所持金
 int g_currentAmountMoney;
@@ -129,11 +178,17 @@ BASE g_baseList[MAX_B];
 // 敵のリスト
 CREEP g_creepList[MAX_Z];
 
+// 生存中の敵のIDリスト
+set<int> g_aliveCreepIdList;
+
 // タワーのリスト
 TOWER g_towerList[MAX_T];
 
 // 建設済みのタワーリスト
 vector<TOWER> g_buildedTowerList;
+
+// 出現ポイントのリスト
+vector<COORD> g_spawnPointList;
 
 // 建設したタワーの数
 int g_buildedTowerCount;
@@ -145,13 +200,11 @@ class PathDefense{
      * 初期化関数
      *         board: ボード情報
      *         money: 初期所持金
-     *   creepHealth: 敵の初期体力(500ターン後は2倍)
+     *   creepHealth: 敵の初期体力(500ターン毎に倍々で増える)
      *    creepMoney: 敵を倒した時に得られるお金
      */
     int init(vector<string> board, int money, int creepHealth, int creepMoney, vector<int> towerType){
       fprintf(stderr,"init =>\n");
-      // ボードを全て番兵で初期化
-      memset(g_board, GUARD, sizeof(g_board));
 
       // ターンを初期化を行う
       g_currentTurn = 0;
@@ -190,23 +243,28 @@ class PathDefense{
       g_boardWidth  = board[0].size();
 
       // ボードの初期化
-      for(int y = 0; y <= g_boardHeight; y++){
-        for(int x = 0; x <= g_boardWidth; x++){
-          // y = 0 or x = or or y = g_boardHeight or x = g_boardWidth
-          // の場合は番兵を設置
-          if(y == 0 || x == 0 || y == g_boardWidth || x == g_boardWidth){
-            g_board[y][x] = GUARD;
+      for(int y = 0; y < g_boardHeight; y++){
+        for(int x = 0; x < g_boardWidth; x++){
+          CELL cell = createCell();
+
           // '#'は平地
-          }else if(board[y][x] == '#'){
-            g_board[y][x] = PLAIN;
+          if(board[y][x] == '#'){
+            cell.type = PLAIN;
+
           // '.'は経路
           }else if(board[y][x] == '.'){
-            g_board[y][x] = PATH;
+            cell.type = PATH;
+            // マップの端であればスポーン地点の追加を行う
+            if(y == 0 || x == 0 || y == g_boardHeight-1 || x == g_boardWidth-1){
+              COORD coord(y, x);
+              g_spawnPointList.push_back(coord);
+            }
+
           // それ以外は基地
           }else{
             // 基地のIDを取得
-            int baseId = char2int(g_board[y][x]);
-            g_board[y][x] = BASE_POINT;
+            int baseId = char2int(board[y][x]);
+            cell.type = BASE_POINT;
 
             // 基地を作成
             BASE base = createBase(baseId, y, x);
@@ -214,6 +272,9 @@ class PathDefense{
             // 基地リストに入れる
             g_baseList[baseId] = base;
           }
+
+          // セルを代入
+          g_board[y][x] = cell;
         }
       }
     }
@@ -239,6 +300,23 @@ class PathDefense{
 
         showTowerData(towerId);
       }
+    }
+
+    /*
+     * [not yet]
+     *   各出現ポイントから基地までの最短経路を計算
+     */
+    void initSpawnToBaseShortPath(){
+    }
+
+    /*
+     * セルの作成
+     *   type: セルのタイプ
+     */
+    CELL createCell(){
+      CELL cell; 
+
+      return cell;
     }
 
     /*
@@ -282,6 +360,10 @@ class PathDefense{
 
     /*
      * タワーの作成を行う(初期化時のみ使用)
+     *   towerId: タワーのID
+     *     range: 攻撃範囲
+     *    damage: 攻撃力
+     *      cost: 建設コスト
      */
     TOWER createTower(int towerId, int range, int damage, int cost){
       TOWER tower(towerId, range, damage, cost);
@@ -303,6 +385,7 @@ class PathDefense{
 
     /*
      * タワーの建設を行う(ゲーム中に使用)
+     *   - 入力
      *   towerId: 建設するタワーの種類
      *         y: 建設を行うy座標
      *         x: 建設を行うx座標
@@ -318,7 +401,10 @@ class PathDefense{
 
     /*
      * 指定したIDの基地を取得する
-     *   baseId: 基地ID
+     *   - 入力
+     *     baseId: 基地ID
+     *   - 返り値
+     *     基地情報のポインタ
      */
     BASE* getBase(int baseId){
       return &g_baseList[baseId];
@@ -338,6 +424,18 @@ class PathDefense{
      */
     TOWER getTower(int towerId){
       return g_towerList[towerId];
+    }
+
+    /*
+     * 画面外に出ていないかをチェック
+     *   - 入力
+     *     y: Y座標
+     *     x: X座標
+     *   - 返り値
+     *     マップから出ているかどうかを返す
+     */
+    bool isOutsideMap(int y, int x){
+      return (y < 0 || x < 0 || y >= g_boardHeight || x >= g_boardWidth);
     }
 
     /*
@@ -411,6 +509,86 @@ class PathDefense{
       updateBoardData(creeps, money, baseHealth);
 
       return ret;
+    }
+
+    /*
+     * ある地点から生存中の敵で一番近い敵のIDを返す
+     *   - 入力
+     *    fromY: 出発地点のy座標
+     *    fromX: 出発地点のx座標
+     *   - 返り値
+     *    mostNearCreepId: 一番近い敵のID
+     */
+    int searchMostNearCreepId(int fromY, int fromX){
+      int mostNearCreepId = UNDEFINED;
+      int roughDist;
+      int minDist = INT_MAX;
+
+      set<int>::iterator it = g_aliveCreepIdList.begin();
+
+      // 生存中の敵をそれぞれ処理
+      while(it != g_aliveCreepIdList.end()){
+        int creepId = (*it);
+        CREEP *creep = getCreep(creepId);
+
+        // 敵との距離を計算
+        roughDist = calcRoughDist(fromY, fromX, creep->y, creep->x);
+
+        if(minDist > roughDist){
+          minDist = roughDist;
+          mostNearCreepId = creepId;
+        }
+
+        it++;
+      }
+
+      return mostNearCreepId;
+    }
+
+    /*
+     * [not yet]
+     * ある敵が特定の基地まで、指定した体力を残しながら到達できるかどうかを調べる
+     *  - 引数
+     *   creepId: 敵ID
+     *    baseId: 基地ID
+     * 
+     *  - 返り値
+     *   true: 到達可能
+     *  false: 到達不可
+     */
+    bool canReachBasePoint(int creepId, int baseId){
+      return true;
+    }
+
+    /* 
+     * [not yet]
+     *   ある地点からどれだけ経路をカバーできるかを計算
+     *   - 入力
+     *     fromY: 出発地点のY座標
+     *     fromX: 出発地点のX座標
+     *     range: 攻撃範囲
+     *   - 返り値
+     *     カバーしている経路の数
+     */
+    int calcCoverdCellCount(int fromY, int fromX, int range){
+      int coverdCellCount = 0;
+
+      queue<COORD> que;
+      que.push(COORD(fromY, fromX, 0));
+      map<int, bool> checkList;
+
+      while(!que.empty()){
+        COORD coord = que.front(); que.pop();
+
+        // もし距離が攻撃範囲であればカバーしている数を増やす
+        if(calcRoughDist(fromY, fromX, coord.y, coord.x) <= range * range){
+          coverdCellCount += 1;
+
+          // 上下左右のセルを追加
+        }
+      }
+
+      return coverdCellCount;
     }
 };
 

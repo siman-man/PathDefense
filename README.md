@@ -4,30 +4,30 @@ You are given a square map containing N by N cells. On the map you have B bases 
 あなたはN * Nのセルで構成された正方形のマップが与えられます。 マップ上には固定されたB個の基地が存在します。
 
 A number of P paths lead from the boundary of the map towards your bases. Your bases are under attack and 
-Pはマップの端から基地に向かう経路の数を表します。                               あなたの基地は現在攻撃を受けており、
+Pはマップの端から基地に向かう経路の数を表します。                                  あなたの基地は現在攻撃を受けており、
 
 you need to defend them by placing defensive towers on the map. Luckily creeps only walk on the paths and 
-あなたは防御するためのタワーを設置することで基地を守る必要があります。    幸いなことに侵略者達は経路上しか歩けず、
+あなたは防御するためのタワーを設置することで基地を守る必要があります。           幸いなことに侵略者達は経路上しか歩けず、
 
 can not attack your towers. You are rewarded with a fixed amount of money for each creep that your towers kill. 
 あなたのタワーを攻撃することが出来ません。 あなたは、自身のタワーが侵略者を倒すたびに一定の報酬を得ます。
 
 You can build T types of towers, each tower will cost you money and can only attack creeps within a specific range and
-あなたはTタイプの数のタワーの構築を行うことが可能であり、それぞれのタワーは一定のコストがかかります。また、各タワーは攻撃範囲内に存在
+あなたはT個のタイプの数のタワーの構築を行うことが可能であり、それぞれのタワーは一定のコストがかかります。また、各タワーは攻撃範囲内に存在
 
 will do a fixed amount of damage when attacking the closest creep. Only one tower can be placed on each cell in the map.
 する一番近い侵略者に対して固定ダメージを与えます。                        タワーはマップ上にあるセルの上にしか建設できません。
 
 Multiple creeps can occupy the same cell. Creeps will spawn randomly on the boundary of the map and select random paths
-複数の侵略者は同じセルを占領することが出来ます。 侵略者はランダムな経路から出現し、あなたの基地を目指して進みます。
+複数の侵略者は同じセルを占領することが出来ます。 侵略者はランダムな出現ポイントから現れ、あなたの基地を目指して進みます。
 
 towards your bases. Additionally, at random times waves of creeps will rush towards some of your bases. 
                      また、        ランダムな時間帯ではあなたの基地に向かって、侵略者による一斉攻撃が開始されます。
 A creep will do damage to your base when it reaches it and disappear after that (The amount of damage 
-侵略者はタワーに到達した際に、タワーに対してダメージを与え、その後に消えます。(侵略者がタワーに与えるダメージは、)
+侵略者はタワーに到達した際に、タワーに対してダメージを与え、その後に消えます。(侵略者がタワーに与えるダメージは、
 
 will be equal to the amount of health of the creep).
-タワーに到達した際の侵略者の体力です。
+タワーに到達した際の侵略者の体力です。)
 
 Your task is to maximize the sum of the amount of money you have and the total base health at the end of the simulation.
 あなたの目的は、ゲーム終了時に基地の体力と所持金を最大にすることです。
