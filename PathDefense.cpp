@@ -161,30 +161,25 @@ typedef struct cell {
   }
 } CELL;
 
-/*
+/**
+ * @fn
  * 文字を数値に変える関数
- *   - 入力
- *     ch: 変換したい文字
- *   - 返り値
- *     変換された数値
+ * @param (ch) 変換したい文字
+ * @return 変換された数値
  */
 int char2int(char ch){
   return ch - '0';
 }
 
-/*
- * (y,x)を1次元に直した場合の値を出す
- *   - 入力
- */
-
-
-/*
+/**
+ * @fn
  * 2点間の大雑把な距離を計算
- *   - 入力
- *     fromY: 出発地点のy座標
- *     fromX: 出発地点のx座標
- *     destY: 目標地点のy座標
- *     destX: 目標地点のx座標
+ * @param (fromY) 出発地点のy座標
+ * @param (fromX) 出発地点のx座標
+ * @param (destY) 目標地点のy座標
+ * @param (destX) 目標地点のx座標
+ * @return sqrtで元に戻す前の距離
+ * @detail どちらの座標が近い/遠いを判断するだけならsqrtで元に戻さなくても比較出来る。
  */
 int calcRoughDist(int fromY, int fromX, int destY, int destX){
   return (fromY-destY) * (fromY-destY) + (fromX-destX) * (fromX-destX);
@@ -237,6 +232,17 @@ int g_prevStep[MAX_N][MAX_N];
 
 //! 建設したタワーの数
 int g_buildedTowerCount;
+
+/**
+ * @fn
+ * (y,x)を1次元に直した場合の値を出す
+ * @param (y) Y座標
+ * @param (x) X座標
+ * @return 1次元座標表現時の値
+ */
+inline int calcZ(int y, int x){
+  return y * g_boardHeight + x;
+}
 
 class PathDefense{
   public:
@@ -409,9 +415,15 @@ class PathDefense{
       que.push(COORD(spawnY, spawnX));
 
       // 前回行動した情報のリセット
-      memset(g_prevStep, -1, sizeof(g_prevStep));
+      memset(g_prevStep, UNDEFINED, sizeof(g_prevStep));
 
       while(!que.empty()){
+        COORD coord = que.front(); que.pop();
+        int z = calcZ(coord.y, coord.x);
+
+        // もしチェックしたセルであれば処理を飛ばす
+        if(checkList[z]) continue;
+        checkList[z] = true;
       }
     }
 
@@ -770,10 +782,11 @@ class PathDefense{
       // 座標情報が無くなるまで繰り返す
       while(!que.empty()){
         COORD coord = que.front(); que.pop();
+        int z = calcZ(coord.y, coord.x);
 
         // 調査済みの座標であれば処理を飛ばす
-        if(checkList[coord.y*g_boardHeight+coord.x]) continue;
-        checkList[coord.y*g_boardHeight+coord.x] = true;
+        if(checkList[z]) continue;
+        checkList[z] = true;
 
         // もし距離が攻撃範囲であれば処理を続ける
         if(calcRoughDist(fromY, fromX, coord.y, coord.x) <= range * range){
