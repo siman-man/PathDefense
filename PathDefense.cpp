@@ -427,6 +427,18 @@ class PathDefense{
     }
 
     /*
+     * 指定した座標のセル情報を取得する
+     *   - 入力
+     *     y: Y座標
+     *     x: x座標
+     *   - 返り値
+     *     セル情報のぽいんた　
+     */
+    CELL* getCell(int y, int x){
+      return &g_board[y][x];
+    }
+
+    /*
      * 画面外に出ていないかをチェック
      *   - 入力
      *     y: Y座標
@@ -436,6 +448,20 @@ class PathDefense{
      */
     bool isOutsideMap(int y, int x){
       return (y < 0 || x < 0 || y >= g_boardHeight || x >= g_boardWidth);
+    }
+
+    /*
+     * タワーが建設可能かどうかを調べる
+     *   - 入力
+     *     y: Y座標
+     *     x: X座標
+     *   - 返り値
+     *     建設可能かどうかを返す
+     */
+    bool canBuildTower(int y, int x){
+      CELL *cell = getCell(y, x);
+
+      return (isOutsideMap(y, x) && cell->type == PLAIN);
     }
 
     /*
