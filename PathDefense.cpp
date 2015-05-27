@@ -15,6 +15,7 @@
 #include <set>
 #include <cstdio>
 #include <cstdlib>
+#include <cassert>
 #include <cmath>
 #include <stack>
 #include <queue>
@@ -80,17 +81,17 @@ typedef struct coord {
 /*
  * スポーン地点を表す構造体
  */
-typedef struct spawnPoint {
+typedef struct spawn {
   int id;     // ID
   int y;      // Y座標
   int x;      // X座標
 
-  spawnPoint(int id = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
+  spawn(int id = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
     this->id = id;
     this->y  = y;
     this->x  = x;
   }
-} SPAWN_POINT;
+} SPAWN;
 
 // 敵を表す構造体
 typedef struct creep {
@@ -155,9 +156,12 @@ typedef struct cell {
   int type;                   // Cellのタイプ
   int damage;                 // この場所で与えられる最大ダメージ
   int coveredCount[MAX_R+1];  // カバーできる経路の数
+  int baseId;                 // 基地がある場合はそのID
 
   cell(int type = UNDEFINED){
-    this->type = type;
+    this->type   = type;
+    this->damage = UNDEFINED;
+    this->baseId = UNDEFINED;
   }
 } CELL;
 
@@ -207,7 +211,7 @@ int g_boardWidth;
 int g_boardHeight;
 
 //! 最短路を得るためのマップ
-int g_shortPathMap[MAX_N][MAX_N][MAX_B*10+1][MAX_B+1];
+int g_shortestPathMap[MAX_N][MAX_N][MAX_B*10+1][MAX_B+1];
 
 //! 基地のリスト
 BASE g_baseList[MAX_B];
@@ -225,7 +229,7 @@ TOWER g_towerList[MAX_T];
 vector<TOWER> g_buildedTowerList;
 
 //! 出現ポイントのリスト
-vector<SPAWN_POINT> g_spawnPointList;
+vector<SPAWN> g_spawnList;
 
 //! 前に行動したstepを覚える配列
 int g_prevStep[MAX_N][MAX_N];
@@ -269,6 +273,9 @@ class PathDefense{
 
       // カバーできる経路の数を計算
       initCoveredCellCount();
+
+      // スポーン地点から基地までの最短路を計算
+      initSpawnToBaseShortestPath();
 
       // 初期の所持金
       g_currentAmountMoney = money;
@@ -335,6 +342,7 @@ class PathDefense{
             // 基地のIDを取得
             int baseId = char2int(board[y][x]);
             cell.type = BASE_POINT;
+            cell.baseId = baseId;
 
             // 基地を作成
             BASE base = createBase(baseId, y, x);
@@ -394,11 +402,11 @@ class PathDefense{
      *   各出現ポイントから基地までの最短経路を計算
      */
     void initSpawnToBaseShortestPath(){
-      int spawnCount = g_spawnPointList.size();
+      int spawnCount = g_spawnList.size();
 
       // スポーン地点毎に処理を行う
       for(int spawnId = 0; spawnId < spawnCount; spawnId++){
-        SPAWN_POINT *spawnPoint = getSpawnPoint(spawnId);
+        calcSpawnToBaseShortestPath(spawnId);
       }
     }
 
@@ -408,11 +416,13 @@ class PathDefense{
      * @param (spawnY) スポーン地点のY座標
      * @param (spawnX) スポーン地点のX座標
      * @sa initSpawnToBaseShortestPath
+     * @detail 最短距離は幅優先探索で出す
      */
-    void calcSpawnToBaseShortestPath(int spawnY, int spawnX){
+    void calcSpawnToBaseShortestPath(int spawnId){
       map<int, bool> checkList;
+      SPAWN *spawn = getSpawn(spawnId);
       queue<COORD> que;
-      que.push(COORD(spawnY, spawnX));
+      que.push(COORD(spawn->y, spawn->x));
 
       // 前回行動した情報のリセット
       memset(g_prevStep, UNDEFINED, sizeof(g_prevStep));
@@ -424,6 +434,48 @@ class PathDefense{
         // もしチェックしたセルであれば処理を飛ばす
         if(checkList[z]) continue;
         checkList[z] = true;
+
+        // セル情報を取得
+        CELL *cell = getCell(coord.y, coord.x);
+
+        // 基地に辿り着いた場合は経路を復元して登録を行う
+        if(cell->type == BASE_POINT){
+          int baseId = cell->baseId;
+          // 最短経路の登録
+          registShortestPath(spawnId, baseId);
+        }else{
+          for(int direct = 0; direct < 4; direct++){
+            int ny = coord.y + DY[direct];
+            int nx = coord.x + DX[direct];
+            int nz = calcZ(ny, nx);
+
+            if(isInsideMap(ny, nx) && !checkList[nz]){
+              que.push(COORD(ny,nx));
+              g_prevStep[ny][nx] = direct;
+            }
+          }
+        }
+      }
+    }
+
+    /**
+     * @fn
+     * 最短経路の登録を行う
+     * @param (spawnId) スポーン地点のID
+     * @param (baseId)  基地のID
+     */
+    void registShortestPath(int spawnId, int baseId){
+       BASE  *base = getBase(baseId);
+      SPAWN *spawn = getSpawn(spawnId);
+      int y = base->y;
+      int x = base->x;
+
+      while(y != spawn->y || x != spawn->x){
+        int prev = g_prevStep[y][x];
+        assert(prev != -1);
+        y += DY[(prev+2)%4];
+        x += DX[(prev+2)%4];
+        g_shortestPathMap[y][x][spawnId][baseId] = prev;
       }
     }
 
@@ -495,10 +547,10 @@ class PathDefense{
      * スポーン地点の追加を行う
      */
     void addSpawnPoint(int y, int x){
-      int spawnId = g_spawnPointList.size();
+      int spawnId = g_spawnList.size();
 
-      SPAWN_POINT spawnPoint(spawnId, y, x);
-      g_spawnPointList.push_back(spawnPoint);
+      SPAWN spawn(spawnId, y, x);
+      g_spawnList.push_back(spawn);
 
       fprintf(stderr,"Add spwan point: y = %d, x = %d\n", y, x);
     }
@@ -568,8 +620,8 @@ class PathDefense{
      *   - 返り値
      *     スポーン地点の情報を指すポインタ
      */
-    SPAWN_POINT* getSpawnPoint(int spawnId){
-      return &g_spawnPointList[spawnId];
+    SPAWN* getSpawn(int spawnId){
+      return &g_spawnList[spawnId];
     }
 
     /*
@@ -584,26 +636,23 @@ class PathDefense{
       return &g_board[y][x];
     }
 
-    /*
-     * マップの中にいるかどうかをチェック
-     *   - 入力
-     *     y: Y座標
-     *     x: X座標
-     *   - 返り値
-     *     true: マップ内
-     *    false: マップ外
+    /**
+     * @fn
+     * マップの内側にいるかどうかをチェック
+     * @param (y) Y座標
+     * @param (x) X座標
+     * @return マップの内側にいるかどうかの判定値
      */
-    bool isInsideMap(int y, int x){
+    inline bool isInsideMap(int y, int x){
       return (y >= 0 && x >= 0 && y < g_boardHeight && x < g_boardWidth); 
     }
 
-    /*
+    /**
+     * @fn
      * 画面外に出ていないかをチェック
-     *   - 入力
-     *     y: Y座標
-     *     x: X座標
-     *   - 返り値
-     *     マップから出ているかどうかを返す
+     * @param (y) Y座標
+     * @param (x) X座標
+     * @return マップから出ているかどうかを返す
      */
     bool isOutsideMap(int y, int x){
       return (y < 0 || x < 0 || y >= g_boardHeight || x >= g_boardWidth);
