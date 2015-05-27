@@ -134,7 +134,13 @@ typedef struct cell {
   }
 } CELL;
 
-// 文字を数値に変える関数
+/*
+ * 文字を数値に変える関数
+ *   - 入力
+ *     ch: 変換したい文字
+ *   - 返り値
+ *     変換された数値
+ */
 int char2int(char ch){
   return ch - '0';
 }
@@ -142,10 +148,11 @@ int char2int(char ch){
 
 /*
  * 2点間の大雑把な距離を計算
- *   fromY: 出発地点のy座標
- *   fromX: 出発地点のx座標
- *   destY: 目標地点のy座標
- *   destX: 目標地点のx座標
+ *   - 入力
+ *     fromY: 出発地点のy座標
+ *     fromX: 出発地点のx座標
+ *     destY: 目標地点のy座標
+ *     destX: 目標地点のx座標
  */
 int calcRoughDist(int fromY, int fromX, int destY, int destX){
   return (fromY-destY) * (fromY-destY) + (fromX-destX) * (fromX-destX);
@@ -475,15 +482,17 @@ class PathDefense{
     /*
      * タワーが建設可能かどうかを調べる
      *   - 入力
-     *     y: Y座標
-     *     x: X座標
+     *     towerId: 建設したいタワーのID
+     *           y: Y座標
+     *           x: X座標
      *   - 返り値
      *     建設可能かどうかを返す
      */
-    bool canBuildTower(int y, int x){
+    bool canBuildTower(int towerId, int y, int x){
       CELL *cell = getCell(y, x);
 
-      return (isOutsideMap(y, x) && cell->type == PLAIN);
+      // マップ内であり、平地であり、所持金が足りている場合は建設可能
+      return (isOutsideMap(y, x) && cell->type == PLAIN && g_towerList[towerId].cost <= g_currentAmountMoney);
     }
 
     /*
