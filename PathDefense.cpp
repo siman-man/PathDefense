@@ -1,4 +1,4 @@
-/*
+/**
  * @file    PathDefense.cpp
  * @brief   PathDefenseを解く用の何か
  * @author  siman
@@ -45,7 +45,7 @@ const int LIMIT_TURN       = 2000;   // ターンの上限
 const int DY[4] = { 1, 0, -1, 0 };
 const int DX[4] = {  0, -1, 0, 1};
   
-/*
+/**
  * @enum Enum 
  * Cellの種別を作成
  */
@@ -251,13 +251,13 @@ inline int calcZ(int y, int x){
 class PathDefense{
   public:
 
-    /*
+    /**
+     * @fn
      * 初期化関数
-     *   - 入力
-     *           board: ボード情報
-     *           money: 初期所持金
-     *     creepHealth: 敵の初期体力(500ターン毎に倍々で増える)
-     *      creepMoney: 敵を倒した時に得られるお金
+     * @param (board)       ボード情報
+     * @param (money)       初期所持金
+     * @param (creepHealth) 敵の初期体力(500ターン毎に倍々で増える)
+     * @param (creepMoney)  敵を倒した時に得られるお金
      */
     int init(vector<string> board, int money, int creepHealth, int creepMoney, vector<int> towerType){
       fprintf(stderr,"init =>\n");
@@ -294,7 +294,8 @@ class PathDefense{
       return 0;
     }
 
-    /*
+    /**
+     * @fn
      * ゲームの基礎情報を表示
      *   - 敵の基礎体力
      *   - 敵を倒した時の報酬
@@ -306,10 +307,10 @@ class PathDefense{
       fprintf(stderr,"-----------------------------------------------\n");
     }
 
-    /*
+    /**
+     * @fn
      * ボードの初期化
-     *   - 入力
-     *     board: 初期ボード
+     * @param (board) 初期ボード
      */
     void initBoardData(vector<string> &board){
       fprintf(stderr,"initBoardData =>\n");
@@ -357,14 +358,20 @@ class PathDefense{
       }
     }
 
-    /*
-     * カバー出来る経路の数を再計算
+    /**
+     * @fn
+     * カバー出来る経路の数を初期化
      */
     void initCoveredCellCount(){
+      // マップ全体を更新
       for(int y = 0; y < g_boardHeight; y++){
         for(int x = 0; x < g_boardWidth; x++){
           CELL *cell = getCell(y,x);
 
+          // 基地が建設出来ない場所は飛ばす
+          if(cell->type != PLAIN) continue;
+
+          // 攻撃範囲1-5までを処理
           for(int range = 1; range <= MAX_R; range++){
             int coveredCount = calcCoveredCellCount(y, x, range);
             cell->coveredCount[range] = coveredCount;
@@ -373,10 +380,10 @@ class PathDefense{
       }
     }
 
-    /*
+    /**
+     * @fn
      * タワー情報の初期化を行う
-     *   - 入力
-     *     towerType: タワーの情報が格納されているリスト
+     * @param (towerType) タワーの情報が格納されているリスト
      */
     void initTowerData(vector<int> &towerType){
       // タワーの種類の数
@@ -389,16 +396,18 @@ class PathDefense{
         int damage = towerType[towerId*3+1];
         int cost   = towerType[towerId*3+2];
 
+        // タワーの作成
         TOWER tower = createTower(towerId, range, damage, cost);
 
+        // タワーの追加
         g_towerList[towerId] = tower;
 
         showTowerData(towerId);
       }
     }
 
-    /*
-     * [not yet]
+    /**
+     * @fn [not yet]
      *   各出現ポイントから基地までの最短経路を計算
      */
     void initSpawnToBaseShortestPath(){
