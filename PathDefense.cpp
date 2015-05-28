@@ -81,6 +81,21 @@ typedef struct coord {
   }
 } COORD;
 
+/**
+ * 建設情報を表す構造体
+ */
+typedef struct buildInfo {
+  int towerId;  // タワーID
+  int y;        // Y座標
+  int x;        // X座標
+
+  buildInfo(int towerId = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
+    this->towerId = towerId;
+    this->y       = y;
+    this->x       = x;
+  }
+} BUILD_INFO;
+
 /*
  * スポーン地点を表す構造体
  */
@@ -88,11 +103,13 @@ typedef struct spawn {
   int id;                 // ID
   int y;                  // Y座標
   int x;                  // X座標
+  int popUpCreepCount;    // 出現した敵の数
 
   spawn(int id = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
     this->id = id;
     this->y  = y;
     this->x  = x;
+    this->popUpCreepCount = 0;
   }
 } SPAWN;
 
@@ -141,6 +158,7 @@ typedef struct tower {
   int range;    // 射程距離
   int damage;   // 攻撃力
   int cost;     // 建設コスト
+  bool locked;  // 敵をロックしているかどうか
 
   tower(int id = UNDEFINED, int range = UNDEFINED, int damage = UNDEFINED, int cost = UNDEFINED){
     this->id      = id;
@@ -163,14 +181,12 @@ typedef struct cell {
   int coveredCount[MAX_R+1];  //! カバーできる経路の数
   int baseId;                 //! 基地がある場合はそのID
   int spawnId;                //! スポーン地点の場合はID
-  int popUpCreepCount; // 出現した敵の数
 
   cell(int type = UNDEFINED){
     this->type    = type;
     this->damage  = UNDEFINED;
     this->baseId  = UNDEFINED;
     this->spawnId = UNDEFINED;
-    this->popUpCreepCount = 0;
   }
 
   /**
@@ -245,11 +261,17 @@ int g_creepHealth;
 //! 基地の総数
 int g_baseCount;
 
+//! タワーの総数
+int g_towerCount;
+
 //! ボードの横幅
 int g_boardWidth;
 
 //! ボードの縦幅
 int g_boardHeight;
+
+//! 今までに出現した敵の総数
+int g_totalCreepCount;
 
 //! 最短路を得るためのマップ
 int g_shortestPathMap[MAX_N][MAX_N][MAX_B*10+1][MAX_B+1];
@@ -307,6 +329,9 @@ class PathDefense{
 
       // ターンを初期化を行う
       g_currentTurn = 0;
+
+      // 出現した敵の総数を初期化
+      g_totalCreepCount = 0;
 
       // ボードの初期化を行う
       initBoardData(board);
@@ -436,11 +461,11 @@ class PathDefense{
      */
     void initTowerData(vector<int> &towerType){
       // タワーの種類の数
-      int towerCount = towerType.size() / 3;
+      g_towerCount = towerType.size() / 3;
 
-      fprintf(stderr,"towerCount = %d\n", towerCount);
+      fprintf(stderr,"towerCount = %d\n", g_towerCount);
 
-      for(int towerId = 0; towerId < towerCount; towerId++){
+      for(int towerId = 0; towerId < g_towerCount; towerId++){
         int range  = towerType[towerId*3];
         int damage = towerType[towerId*3+1];
         int cost   = towerType[towerId*3+2];
@@ -453,6 +478,58 @@ class PathDefense{
 
         showTowerData(towerId);
       }
+    }
+
+    /**
+     * @fn [not yet]
+     * タワーを建設するべきかどうかを調べる
+     * 
+     * @return 建設するか否かの判定値
+     * @detail なるべく後出しでタワーを建設したいのでギリギリまで建てないようにする
+     */
+    bool toBuildTower(){
+      return true;
+    }
+
+    /**
+     * @fn [not yet]
+     * どこにタワーを立てるのが良いかを調べてその座標を返す
+     *
+     * @return 建設する場所とタワーID
+     */
+    BUILD_INFO searchBestBuildPoint(){
+      int bestValue = INT_MIN;
+      int bestY;
+      int bestX;
+      int bestId;
+
+      // マップ全体に対して処理を行う
+      for(int y = 0; y < g_boardHeight; y++){
+        for(int x = 0; x < g_boardWidth; x++){
+          // セル情報を取得
+          CELL *cell = getCell(y,x);
+
+          // 平地以外は処理を飛ばす
+          if(!cell->isPlain()) continue;
+
+
+          for(int towerId = 0; towerId < g_towerCount; towerId++){
+            TOWER *tower = getTower(towerId);
+            int coveredCount = calcCoveredCellCount(y, x, tower->range);
+            int value = coveredCount;
+
+            // 評価値が更新されたら建設情報を更新
+            if(bestValue < value){
+              bestValue = value;
+              bestId = towerId;
+              bestY = y;
+              bestX = x;
+            }
+          }
+        }
+      }
+
+      return BUILD_INFO(bestId, bestY, bestX);
     }
 
     /**
@@ -565,7 +642,7 @@ class PathDefense{
 
     /**
      * @fn
-     * 敵を作成する
+     * 敵を作成、敵の出現数を増やす
      * @param (creepId) creepのID 
      * @param (health)  体力
      * @param (y)       敵のY座標
@@ -576,6 +653,9 @@ class PathDefense{
     CREEP createCreep(int creepId, int health, int y, int x){
       // セル情報の取得
       CELL *cell = getCell(y,x);
+      assert(cell->spawnId != UNDEFINED);
+
+      SPAWN *spawn = getSpawn(cell->spawnId);
 
       // 敵のインスタンスを作成
       CREEP creep(creepId, health, y, x);
@@ -586,8 +666,11 @@ class PathDefense{
       // 現在のターン時に出現したことを記録
       creep.created_at = g_currentTurn;
 
-      // 出現した敵の数を更新する
-      cell->popUpCreepCount += 1;
+      // スポーン地点から出現した敵の数を更新する
+      spawn->popUpCreepCount += 1;
+
+      // 全体の出現数を更新する
+      g_totalCreepCount += 1;
 
       return creep;
     }
@@ -644,11 +727,11 @@ class PathDefense{
      * @param (towerId) タワーID
      */
     void showTowerData(int towerId){
-      TOWER tower = getTower(towerId);
+      TOWER *tower = getTower(towerId);
 
-      double value = tower.range * (tower.damage*tower.damage) / (double)tower.cost/4.0;
+      double value = tower->range * (tower->damage*tower->damage) / (double)tower->cost/4.0;
       fprintf(stderr,"towerId = %d, range = %d, damage = %d, cost = %d, value = %4.2f\n", 
-          towerId, tower.range, tower.damage, tower.cost, value);
+          towerId, tower->range, tower->damage, tower->cost, value);
     }
 
     /**
@@ -661,7 +744,7 @@ class PathDefense{
      * @detail 建設情報もここで追加を行う
      */
     void buildTower(int towerId, int y, int x){
-      TOWER tower = getTower(towerId);
+      TOWER tower = buyTower(towerId);
       tower.y = y;
       tower.x = x;
 
@@ -698,11 +781,30 @@ class PathDefense{
 
     /**
      * @fn
+     * タワーを購入する
+     * @param (towerId) タワーID
+     * @return タワー情報
+     */
+    TOWER buyTower(int towerId){
+      TOWER tower = g_towerList[towerId];
+
+      // 建設コストより所持金が少ない状態でタワーは購入出来ない
+      assert(tower.cost <= g_currentAmountMoney);
+      // 所持金を減らす
+      g_currentAmountMoney -= tower.cost;
+
+      return tower;
+    }
+
+    /**
+     * @fn
      * 指定したIDのタワー情報を取得
      * @param (towerId) タワーID
+     *
+     * @return タワー情報のポインタ
      */
-    TOWER getTower(int towerId){
-      return g_towerList[towerId];
+    TOWER* getTower(int towerId){
+      return &g_towerList[towerId];
     }
 
     /**
