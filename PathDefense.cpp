@@ -24,14 +24,14 @@ using namespace std;
 
 typedef long long ll;
 
-const int UNDEFINED        = -1;     // 値が未定義
-const int MAX_N            = 60 + 2; // ボードの最大長(番兵込み)
-const int MAX_Z            = 2015;   // 敵の最大数(実際は2000が最大)
-const int MAX_B            = 10;     // 基地の最大数(実際は8が最大)
-const int MAX_T            = 25;     // タワーの最大数(実際は20が最大)
-const int MAX_R            = 5;      // 攻撃範囲の最大値
-const int BASE_INIT_HEALTH = 1000;   // 基地の初期体力(1000固定)
-const int LIMIT_TURN       = 2000;   // ターンの上限
+const int UNDEFINED        = -1;     //! 値が未定義
+const int MAX_N            = 60 + 2; //! ボードの最大長(番兵込み)
+const int MAX_Z            = 2015;   //! 敵の最大数(実際は2000が最大)
+const int MAX_B            = 10;     //! 基地の最大数(実際は8が最大)
+const int MAX_T            = 25;     //! タワーの最大数(実際は20が最大)
+const int MAX_R            = 5;      //! 攻撃範囲の最大値
+const int BASE_INIT_HEALTH = 1000;   //! 基地の初期体力(1000固定)
+const int LIMIT_TURN       = 2000;   //! ターンの上限
 
 /*
  * それぞれの方角と数値の対応
@@ -151,17 +151,46 @@ typedef struct tower {
   }
 } TOWER;
 
-// マップの各要素を表す構造体
+/*
+ * @brief マップの各要素を表す構造体
+ */
 typedef struct cell {
-  int type;                   // Cellのタイプ
-  int damage;                 // この場所で与えられる最大ダメージ
-  int coveredCount[MAX_R+1];  // カバーできる経路の数
-  int baseId;                 // 基地がある場合はそのID
+  int type;                   //! Cellのタイプ
+  int damage;                 //! この場所で与えられる最大ダメージ
+  int coveredCount[MAX_R+1];  //! カバーできる経路の数
+  int baseId;                 //! 基地がある場合はそのID
 
   cell(int type = UNDEFINED){
     this->type   = type;
     this->damage = UNDEFINED;
     this->baseId = UNDEFINED;
+  }
+
+  /**
+   * @fn
+   * 平地かどうかを返す
+   * @return 平地かどうかの判定値
+   */
+  bool isPlain(){
+    return type == PLAIN;
+  }
+
+  /**
+   * @fn
+   * 基地かどうかを返す
+   * @return 基地かどうかの判定値
+   */
+  bool isBase(){
+    return type == BASE_POINT;
+  }
+
+  /**
+   * @fn
+   * 経路かどうかを返す
+   * @return 経路かどうかの判定値
+   */
+  bool isPath(){
+    return type == PATH;
   }
 } CELL;
 
@@ -169,6 +198,7 @@ typedef struct cell {
  * @fn
  * 文字を数値に変える関数
  * @param (ch) 変換したい文字
+ *
  * @return 変換された数値
  */
 int char2int(char ch){
@@ -182,6 +212,7 @@ int char2int(char ch){
  * @param (fromX) 出発地点のx座標
  * @param (destY) 目標地点のy座標
  * @param (destX) 目標地点のx座標
+ *
  * @return sqrtで元に戻す前の距離
  * @detail どちらの座標が近い/遠いを判断するだけならsqrtで元に戻さなくても比較出来る。
  */
@@ -228,7 +259,7 @@ TOWER g_towerList[MAX_T];
 //! 建設済みのタワーリスト
 vector<TOWER> g_buildedTowerList;
 
-//! 出現ポイントのリスト
+//! スポーン地点のリスト
 vector<SPAWN> g_spawnList;
 
 //! 前に行動したstepを覚える配列
@@ -242,6 +273,7 @@ int g_buildedTowerCount;
  * (y,x)を1次元に直した場合の値を出す
  * @param (y) Y座標
  * @param (x) X座標
+ *
  * @return 1次元座標表現時の値
  */
 inline int calcZ(int y, int x){
@@ -250,6 +282,7 @@ inline int calcZ(int y, int x){
 
 class PathDefense{
   public:
+    vector<int> m_buildTowerData;
 
     /**
      * @fn
@@ -552,8 +585,11 @@ class PathDefense{
       return tower;
     }
 
-    /*
+    /**
+     * @fn
      * スポーン地点の追加を行う
+     * @param (y) Y座標
+     * @param (x) X座標
      */
     void addSpawnPoint(int y, int x){
       int spawnId = g_spawnList.size();
@@ -561,13 +597,13 @@ class PathDefense{
       SPAWN spawn(spawnId, y, x);
       g_spawnList.push_back(spawn);
 
-      fprintf(stderr,"Add spwan point: y = %d, x = %d\n", y, x);
+      fprintf(stderr,"Add spwan %d point: y = %d, x = %d\n", spawnId, y, x);
     }
 
-    /*
+    /**
+     * @fn
      * タワー情報の表示
-     *   - 入力
-     *     towerId: タワーID
+     * @param (towerId) タワーID
      */
     void showTowerData(int towerId){
       TOWER tower = getTower(towerId);
@@ -577,12 +613,14 @@ class PathDefense{
           towerId, tower.range, tower.damage, tower.cost, value);
     }
 
-    /*
+    /**
+     * @fn
      * タワーの建設を行う(ゲーム中に使用)
-     *   - 入力
-     *     towerId: 建設するタワーの種類
-     *           y: 建設を行うY座標
-     *           x: 建設を行うX座標
+     * @param (towerId) 建設するタワーの種類
+     * @param (y)       建設を行うY座標
+     * @param (x)       建設を行うX座標
+     * 
+     * @detail 建設情報もここで追加を行う
      */
     void buildTower(int towerId, int y, int x){
       TOWER tower = getTower(towerId);
@@ -591,55 +629,62 @@ class PathDefense{
 
       // 建設したタワーリストに追加
       g_buildedTowerList.push_back(tower);
+
+      // 建設情報の追加
+      m_buildTowerData.push_back(tower.x);
+      m_buildTowerData.push_back(tower.y);
+      m_buildTowerData.push_back(tower.id);
     }
 
-    /*
+    /**
+     * @fn
      * 指定したIDの基地を取得する
-     *   - 入力
-     *     baseId: 基地ID
-     *   - 返り値
-     *     基地情報のポインタ
+     * @param (baseId) 基地ID
+     *
+     * @return 基地情報のポインタ
      */
     BASE* getBase(int baseId){
       return &g_baseList[baseId];
     }
 
-    /*
+    /**
+     * @fn
      * 指定したIDの敵を取得する
-     *   - 入力
-     *     creepId: 敵ID
+     * @param (creepId) 敵ID
+     *
+     * @return 敵情報のポインタ
      */
     CREEP* getCreep(int creepId){
       return &g_creepList[creepId];
     }
 
-    /*
+    /**
+     * @fn
      * 指定したIDのタワー情報を取得
-     *   - 入力
-     *     towerId: タワーID
+     * @param (towerId) タワーID
      */
     TOWER getTower(int towerId){
       return g_towerList[towerId];
     }
 
-    /*
+    /**
+     * @fn
      * スポーン地点の取得
-     *   - 入力
-     *     spawnId: スポーンID
-     *   - 返り値
-     *     スポーン地点の情報を指すポインタ
+     * @param (spawnId) スポーンID
+     * 
+     * @return スポーン地点の情報を指すポインタ
      */
     SPAWN* getSpawn(int spawnId){
       return &g_spawnList[spawnId];
     }
 
-    /*
+    /**
+     * @fn
      * 指定した座標のセル情報を取得する
-     *   - 入力
-     *     y: Y座標
-     *     x: x座標
-     *   - 返り値
-     *     セル情報のポインタ
+     * @param (y) Y座標
+     * @param (x) X座標
+     *
+     * @return セル情報のポインタ
      */
     CELL* getCell(int y, int x){
       return &g_board[y][x];
@@ -650,6 +695,7 @@ class PathDefense{
      * マップの内側にいるかどうかをチェック
      * @param (y) Y座標
      * @param (x) X座標
+     *
      * @return マップの内側にいるかどうかの判定値
      */
     inline bool isInsideMap(int y, int x){
@@ -661,30 +707,37 @@ class PathDefense{
      * 画面外に出ていないかをチェック
      * @param (y) Y座標
      * @param (x) X座標
+     *
      * @return マップから出ているかどうかを返す
      */
-    bool isOutsideMap(int y, int x){
+    inline bool isOutsideMap(int y, int x){
       return (y < 0 || x < 0 || y >= g_boardHeight || x >= g_boardWidth);
     }
 
-    /*
+    /**
+     * @fn
      * タワーが建設可能かどうかを調べる
-     *   - 入力
-     *     towerId: 建設したいタワーのID
-     *           y: Y座標
-     *           x: X座標
-     *   - 返り値
-     *     建設可能かどうかを返す
+     * @param (towerId) 建設したいタワーのID
+     * @param (y)       Y座標
+     * @param (x)       X座標
+     *
+     * @return 建設可能かどうかの判定値
      */
     bool canBuildTower(int towerId, int y, int x){
       CELL *cell = getCell(y, x);
 
       // マップ内であり、平地であり、所持金が足りている場合は建設可能
-      return (isOutsideMap(y, x) && cell->type == PLAIN && g_towerList[towerId].cost <= g_currentAmountMoney);
+      return (isOutsideMap(y, x) && cell->isPlain() && g_towerList[towerId].cost <= g_currentAmountMoney);
     }
 
-    /*
+    /**
+     * @fn
      * ボードの状態を更新する
+     * @param (creeps)     現在マップ上に存在する敵の情報リスト
+     * @param (money)      現在の所持金
+     * @param (baseHealth) 基地の体力リスト
+     *
+     * @detail
      *   - 所持金の更新
      *   - 敵情報の更新
      *   - 基地情報の更新
@@ -749,18 +802,17 @@ class PathDefense{
       }
     }
 
-    /*
-     * ゲーム中毎回呼ばれる関数
-     *   - 引数
-     *         creeps: 敵の情報リスト
-     *          money: 現在の所持金
-     *     baseHealth: 基地の体力情報
+    /**
+     * @fn
+     * ゲーム中、毎回呼ばれる関数
+     * @param (creeps)     敵の情報リスト
+     * @param (money)      現在の所持金
+     * @param (baseHealth) 基地の体力情報
      *
-     *   - 返り値
-     *     タワーの建設情報
+     * @return タワーの建設情報
      */
     vector<int> placeTowers(vector<int> creeps, int money, vector<int> baseHealth){
-      vector<int> towerBuildData;
+      m_buildTowerData.clear();
 
       // ゲーム情報の更新
       updateBoardData(creeps, money, baseHealth);
@@ -769,7 +821,7 @@ class PathDefense{
       g_currentTurn += 1;
 
       // タワーの建設情報を返して終わり
-      return towerBuildData;
+      return m_buildTowerData;
     }
 
     /*
@@ -828,6 +880,7 @@ class PathDefense{
      *   @param (fromY) 出発地点のY座標
      *   @param (fromX) 出発地点のX座標
      *   @param (range) 攻撃範囲
+     *
      *   @return カバーしている経路の数
      */
     int calcCoveredCellCount(int fromY, int fromX, int range){
