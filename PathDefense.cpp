@@ -66,6 +66,24 @@ enum CellType{
   SPAWN_POINT
 };
 
+/**
+ * @enum Enum
+ * 敵の状態を作成
+ */
+enum CreepState {
+  //! 生きている(ALIVE)
+  ALIVE,
+
+  //! 倒された(DEAD)
+  DEAD,
+
+  //! 倒される予定(MAYBE_DEAD)
+  MAYBE_DEAD,
+
+  //! 倒せない(NON_STOP)
+  NON_STOP
+};
+
 /*
  * 座標を表す構造体
  */
@@ -122,6 +140,7 @@ typedef struct creep {
   int created_at;     // 出現時のターン数
   int disappeared_at; // 消失時のターン数
   int target;         // 狙っている基地
+  int state;          // 敵の状態
 
   // 初期化
   creep(int id = UNDEFINED, int health = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
@@ -131,6 +150,7 @@ typedef struct creep {
     this->x           = x;
     this->created_at  = UNDEFINED;
     this->target      = UNDEFINED;
+    this->state       = ALIVE;
   }
 } CREEP;
 
@@ -513,6 +533,7 @@ class PathDefense{
           if(!cell->isPlain()) continue;
 
 
+          // 全てのタワーで処理を行う
           for(int towerId = 0; towerId < g_towerCount; towerId++){
             TOWER *tower = getTower(towerId);
             int coveredCount = calcCoveredCellCount(y, x, tower->range);
@@ -865,9 +886,10 @@ class PathDefense{
      */
     bool canBuildTower(int towerId, int y, int x){
       CELL *cell = getCell(y, x);
+      TOWER *tower = getTower(towerId);
 
       // マップ内であり、平地であり、所持金が足りている場合は建設可能
-      return (isOutsideMap(y, x) && cell->isPlain() && g_towerList[towerId].cost <= g_currentAmountMoney);
+      return (isInsideMap(y, x) && cell->isPlain() && tower->cost <= g_currentAmountMoney);
     }
 
     /**
