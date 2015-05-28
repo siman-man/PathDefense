@@ -1018,6 +1018,9 @@ class PathDefense{
      *   - 基地の周りのセルの防御価値は高い
      */
     void initCellDefenseValue(){
+      // 各基地に対して処理を行う
+      for(int baseId = 0; baseId < g_baseCount; baseId++){
+      }
     }
 
     /**
@@ -1029,6 +1032,44 @@ class PathDefense{
      * @detail
      */
     int updateCellDefeseValue(){
+    }
+
+    /**
+     * @fn [not yet]
+     * 防御価値を設定(基地周辺)
+     * @param (baseId) 基地ID
+     *
+     * @sa initCellDefenseValue
+     * @detail
+     * 幅優先である範囲は優先度を高くする
+     */
+    void setBaseDefenseValue(int baseId){
+      int LIMIT = 5;
+      BASE *base = getBase(baseId);
+      map<int, bool> checkList;
+      queue<COORD> que;
+      que.push(COORD(base->y, base->x, 0));
+
+      while(!que.empty()){
+        COORD coord = que.front(); que.pop();
+        int z = calcZ(coord.y, coord.x);
+
+        // 既に訪れていた場合はスキップ
+        if(checkList[z]) continue;
+        checkList[z] = true;
+
+        CELL *cell = getCell(coord.y, coord.x);
+        cell->defenseValue += 1;
+
+        for(int direct = 0; direct < 4; direct++){
+          int ny = coord.y + DY[direct];
+          int nx = coord.x + DX[direct];
+
+          if(isInsideMap(ny, nx)){
+            que.push(COORD(ny, nx, coord.dist+1));
+          }
+        }
+      }
     }
 
     /**
