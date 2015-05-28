@@ -60,7 +60,10 @@ enum CellType{
   BASE_POINT,
 
   //! 平地(PLAIN)
-  PLAIN
+  PLAIN,
+
+  //! スポーン地点(SPAWN_POINT)
+  SPAWN_POINT
 };
 
 /*
@@ -82,9 +85,9 @@ typedef struct coord {
  * スポーン地点を表す構造体
  */
 typedef struct spawn {
-  int id;     // ID
-  int y;      // Y座標
-  int x;      // X座標
+  int id;                 // ID
+  int y;                  // Y座標
+  int x;                  // X座標
 
   spawn(int id = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
     this->id = id;
@@ -159,11 +162,15 @@ typedef struct cell {
   int damage;                 //! この場所で与えられる最大ダメージ
   int coveredCount[MAX_R+1];  //! カバーできる経路の数
   int baseId;                 //! 基地がある場合はそのID
+  int spawnId;                //! スポーン地点の場合はID
+  int popUpCreepCount; // 出現した敵の数
 
   cell(int type = UNDEFINED){
-    this->type   = type;
-    this->damage = UNDEFINED;
-    this->baseId = UNDEFINED;
+    this->type    = type;
+    this->damage  = UNDEFINED;
+    this->baseId  = UNDEFINED;
+    this->spawnId = UNDEFINED;
+    this->popUpCreepCount = 0;
   }
 
   /**
@@ -234,6 +241,9 @@ int g_reward;
 
 //! 敵の初期体力
 int g_creepHealth;
+
+//! 基地の総数
+int g_baseCount;
 
 //! ボードの横幅
 int g_boardWidth;
@@ -322,6 +332,7 @@ class PathDefense{
       // 敵の初期体力の初期化
       g_creepHealth = creepHealth;
 
+      // ゲーム情報の表示
       showGameData();
       
       return 0;
@@ -367,8 +378,13 @@ class PathDefense{
             cell.type = PATH;
             // マップの端であればスポーン地点の追加を行う
             if(y == 0 || x == 0 || y == g_boardHeight-1 || x == g_boardWidth-1){
+              int spawnId = g_spawnList.size();
+              // cellのタイプをスポーン地点で上書き
+              cell.type = SPAWN_POINT;
+              cell.spawnId = spawnId;
+
               // スポーン地点の追加
-              addSpawnPoint(y, x);
+              addSpawnPoint(spawnId, y, x);
             }
 
           // それ以外は基地
@@ -438,6 +454,22 @@ class PathDefense{
         showTowerData(towerId);
       }
     }
+
+    /**
+     * @fn [not yet]
+     * ある地点から出現した敵がどこかの基地にたどり着けるかどうかを確認
+     * @param (fromY)  出発地点のY座標
+     * @param (fromX)  出発地点のX座標
+     * @param (health) 体力
+     *
+     * @sa canReachBasePoint
+     * @return どこかの基地に到達できるかどうかの判定値
+     */
+    bool isAnyBaseReachable(int fromY, int fromX, int health){
+      // 全ての基地に対して実行を行う
+      for(int baseId = 0; baseId < g_baseCount; baseId++){
+      }
+    }     
 
     /**
      * @fn [not yet]
@@ -539,9 +571,12 @@ class PathDefense{
      * @param (y)       敵のY座標
      * @param (x)       敵のX座標
      *
-     * @return CREEP
+     * @return 敵情報
      */
     CREEP createCreep(int creepId, int health, int y, int x){
+      // セル情報の取得
+      CELL *cell = getCell(y,x);
+
       // 敵のインスタンスを作成
       CREEP creep(creepId, health, y, x);
 
@@ -551,18 +586,20 @@ class PathDefense{
       // 現在のターン時に出現したことを記録
       creep.created_at = g_currentTurn;
 
+      // 出現した敵の数を更新する
+      cell->popUpCreepCount += 1;
+
       return creep;
     }
 
-    /*
+    /**
+     * @fn
      * 基地を作成する
-     *   - 入力
-     *     id: baseのID
-     *      y: 基地のY座標
-     *      x: 基地のX座標
+     * @param (baseId) baseのID
+     * @param (y)      基地のY座標
+     * @param (x)      基地のX座標
      *
-     *   - 返り値
-     *     BASE
+     * @return 基地情報
      */
     BASE createBase(int baseId, int y, int x){
       // 基地のインスタンスを作成
@@ -571,13 +608,15 @@ class PathDefense{
       return base;
     }
 
-    /*
+    /**
+     * @fn
      * タワーの作成を行う(初期化時のみ使用)
-     *   - 入力
-     *     towerId: タワーのID
-     *       range: 攻撃範囲
-     *      damage: 攻撃力
-     *        cost: 建設コスト
+     * @param (towerId) タワーのID
+     * @param (range)   攻撃範囲
+     * @param (damage)  攻撃力
+     * @param (cost)    建設コスト
+     *
+     * @return タワーの情報
      */
     TOWER createTower(int towerId, int range, int damage, int cost){
       TOWER tower(towerId, range, damage, cost);
@@ -588,12 +627,11 @@ class PathDefense{
     /**
      * @fn
      * スポーン地点の追加を行う
-     * @param (y) Y座標
-     * @param (x) X座標
+     * @param (spawnId) スポーンID
+     * @param (y)       Y座標
+     * @param (x)       X座標
      */
-    void addSpawnPoint(int y, int x){
-      int spawnId = g_spawnList.size();
-
+    void addSpawnPoint(int spawnId, int y, int x){
       SPAWN spawn(spawnId, y, x);
       g_spawnList.push_back(spawn);
 
@@ -753,10 +791,10 @@ class PathDefense{
       updateBasesData(baseHealth);
     }
 
-    /*
+    /**
+     * @fn
      * 敵情報の更新
-     *   - 入力
-     *     creeps: 敵の情報リスト
+     * @param (creeps) 敵の情報リスト
      */
     void updateCreepsData(vector<int> &creeps){
       // 敵の数
@@ -785,17 +823,17 @@ class PathDefense{
       }
     }
 
-    /*
+    /**
+     * @fn
      * 基地情報の更新を行う
-     *   - 入力
-     *     baseHealth: 基地の体力情報のリスト
+     * @param (baseHealth) 基地の体力情報のリスト
      */
     void updateBasesData(vector<int> &baseHealth){
       // 基地の数
-      int baseCount = baseHealth.size();
+      g_baseCount = baseHealth.size();
 
       // 各基地の体力を更新
-      for(int baseId = 0; baseId < baseCount; baseId++){
+      for(int baseId = 0; baseId < g_baseCount; baseId++){
         BASE *base = getBase(baseId);
 
         base->health = baseHealth[baseId];
@@ -824,14 +862,13 @@ class PathDefense{
       return m_buildTowerData;
     }
 
-    /*
+    /**
+     * @fn
      * ある地点から生存中の敵で一番近い敵のIDを返す
-     *   - 入力
-     *     fromY: 出発地点のy座標
-     *     fromX: 出発地点のx座標
+     * @param (fromY) 出発地点のy座標
+     * @param (fromX) 出発地点のx座標
      *
-     *   - 返り値
-     *     mostNearCreepId: 一番近い敵のID
+     * @return 一番近い敵のID
      */
     int searchMostNearCreepId(int fromY, int fromX){
       int mostNearCreepId = UNDEFINED;
@@ -859,29 +896,26 @@ class PathDefense{
       return mostNearCreepId;
     }
 
-    /*
-     * [not yet]
+    /**
+     * @fn [not yet]
      * ある敵が特定の基地まで、指定した体力を残しながら到達できるかどうかを調べる
-     *  - 引数
-     *   creepId: 敵ID
-     *    baseId: 基地ID
+     * @param (creepId) 敵ID
+     * @param (baseId) 基地ID
      * 
-     *  - 返り値
-     *   true: 到達可能
-     *  false: 到達不可
+     * @return 到達かどうかを示す判定値
      */
     bool canReachBasePoint(int creepId, int baseId){
       return true;
     }
 
-    /* 
-     *   @fn
-     *   ある地点からどれだけの経路をカバーできるかを計算
-     *   @param (fromY) 出発地点のY座標
-     *   @param (fromX) 出発地点のX座標
-     *   @param (range) 攻撃範囲
+    /**
+     * @fn
+     * ある地点からどれだけの経路をカバーできるかを計算
+     * @param (fromY) 出発地点のY座標
+     * @param (fromX) 出発地点のX座標
+     * @param (range) 攻撃範囲
      *
-     *   @return カバーしている経路の数
+     * @return カバーしている経路の数
      */
     int calcCoveredCellCount(int fromY, int fromX, int range){
       int coveredCellCount = 0;
