@@ -199,6 +199,11 @@ typedef struct base {
     this->x      = x;
     this->state  = SAFETY;
   }
+
+  // 破壊されたかどうかの確認
+  bool isBroken(){
+    return health == 0;
+  }
 } BASE;
 
 /* 
@@ -234,12 +239,14 @@ typedef struct cell {
   int coveredCount[MAX_R+1];  //! カバーできる経路の数
   int baseId;                 //! 基地がある場合はそのID
   int spawnId;                //! スポーン地点の場合はID
+  int defenseValue;           //! セルの防御価値(値が高い程守る優先度が高い)
 
   cell(int type = UNDEFINED){
-    this->type    = type;
-    this->damage  = UNDEFINED;
-    this->baseId  = UNDEFINED;
-    this->spawnId = UNDEFINED;
+    this->type          = type;
+    this->damage        = UNDEFINED;
+    this->baseId        = UNDEFINED;
+    this->spawnId       = UNDEFINED;
+    this->defenseValue  = 0;
   }
 
   /**
@@ -995,7 +1002,33 @@ class PathDefense{
         BASE *base = getBase(baseId);
 
         base->health = baseHealth[baseId];
+
+        // もし体力が0になっていた場合、状態を「破壊された」に変更
+        if(base->isBroken()){
+          base->state = BROKEN;
+        }
       }
+    }
+
+    /**
+     * @fn [not yet]
+     * セルの防御価値を初期化する。
+     *
+     * @detail
+     *   - 基地の周りのセルの防御価値は高い
+     */
+    void initCellDefenseValue(){
+    }
+
+    /**
+     * @fn [not yet]
+     * セルの防御価値を計算する。防御価値の高いセルは優先的に守る
+     * @param (y) Y座標
+     * @param (x) X座標
+     *
+     * @detail
+     */
+    int updateCellDefeseValue(){
     }
 
     /**
