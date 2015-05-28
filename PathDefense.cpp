@@ -84,6 +84,31 @@ enum CreepState {
   NON_STOP
 };
 
+/**
+ * @enum Enum
+ * 基地の状態を表す
+ */
+enum BaseState {
+  //! 安全な状態(SAFETY)
+  SAFETY,
+
+  //! 警告(WARNING)
+  WARNING,
+
+  //! 危険(DANGER)
+  DANGER,
+
+  //! 破壊された
+  BROKEN
+};
+
+/**
+ * @enum Enum
+ * タワーの状態を表す
+ */
+enum TowerState {
+};
+
 /*
  * 座標を表す構造体
  */
@@ -131,7 +156,9 @@ typedef struct spawn {
   }
 } SPAWN;
 
-// 敵を表す構造体
+/*
+ * 敵を表す構造体
+ */
 typedef struct creep {
   int id;             // ID
   int health;         // 体力
@@ -154,12 +181,15 @@ typedef struct creep {
   }
 } CREEP;
 
-// 基地を表す構造体
+/*
+ * 基地を表す構造体
+ */
 typedef struct base {
   int id;         // ID
   int health;     // 体力
   int y;          // y座標
   int x;          // x座標
+  int state;      // 基地の状態
 
   // 初期化
   base(int id = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
@@ -167,10 +197,13 @@ typedef struct base {
     this->health = BASE_INIT_HEALTH;
     this->y      = y;
     this->x      = x;
+    this->state  = SAFETY;
   }
 } BASE;
 
-// タワーを表す構造体
+/* 
+ * @brief タワーを表す構造体
+ */
 typedef struct tower {
   int id;       // ID
   int y;        // y座標
@@ -391,6 +424,7 @@ class PathDefense{
      */
     void showGameData(){
       fprintf(stderr,"-----------------------------------------------\n");
+      fprintf(stderr,"BoardSize = Y: %d, X: %d\n", g_boardHeight, g_boardWidth);
       fprintf(stderr,"creepHealth = %d\n", g_creepHealth);
       fprintf(stderr,"reward = %d\n", g_reward);
       fprintf(stderr,"-----------------------------------------------\n");
