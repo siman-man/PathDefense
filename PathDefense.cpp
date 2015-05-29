@@ -267,11 +267,29 @@ typedef struct cell {
 
   /**
    * @fn [complete]
+   * 平地でないかどうかを返す
+   * @return 平地でないかどうかの判定値
+   */
+  bool isNotPlain(){
+    return !isPlain();
+  }
+
+  /**
+   * @fn [complete]
    * 基地かどうかを返す
    * @return 基地かどうかの判定値
    */
   bool isBasePoint(){
     return type == BASE_POINT;
+  }
+
+  /**
+   * @fn [complete]
+   * 基地でないかどうかを返す
+   * @return 基地でないかどうかの判定値
+   */
+  bool isNotBasePoint(){
+    return !isBasePoint();
   }
 
   /**
@@ -727,6 +745,10 @@ class PathDefense{
      * 最短経路の登録を行う
      * @param (spawnId) スポーン地点のID
      * @param (baseId)  基地のID
+     *
+     * @detail
+     * マップに「このセルからこの基地へはこの方角が最短ですよ」情報を書き込む
+     * 各Cellに「この基地への最短路の経路になってます」情報を書き込む
      */
     void registShortestPath(int spawnId, int baseId){
        BASE  *base = getBase(baseId);
@@ -1124,9 +1146,40 @@ class PathDefense{
      * 
      * @detail
      * 敵が行動する経路を計算して、その部分の防御優先度を高くする
+     * 進行方向の値だけを伸ばす
      */
     void setCreepMovePathValue(int creepId){
       CREEP *creep = getCreep(creepId);
+      CELL *cell = getCell(creep->y, creep->x);
+
+      set<int>::iterator it = cell->basePaths.begin();
+
+      while(it != cell->basePaths.end()){
+        int baseId = (*it);
+        it++;
+      }
+    }
+
+    /**
+     * @fn [not yet]
+     * 基地までの足跡をつける
+     * @param (y)      Y座標
+     * @param (x)      X座標
+     * @param (baseId) 目的地の基地ID
+     * @param (limit)  距離の限界
+     *
+     * @sa setCreepMovePathValue
+     * @detail
+     * 基地までの足跡をつける
+     */
+    void putFootPrint(int y, int x, int baseId, int limit){
+      BASE *base = getBase(baseId);
+      CELL *cell = getCell(y, x);
+      int dist = 0;
+
+      // 制限距離を超えるか、基地に到達するまで繰り返す
+      while(dist <= limit && cell->isNotBasePoint()){
+      }
     }
 
     /**
