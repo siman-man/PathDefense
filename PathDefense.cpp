@@ -167,7 +167,7 @@ typedef struct creep {
   int x;              // x座標
   int created_at;     // 出現時のターン数
   int disappeared_at; // 消失時のターン数
-  int target;         // 狙っている基地
+  int targetBases;    // 狙っている基地候補(1つとは限らない)
   int state;          // 敵の状態
 
   // 初期化
@@ -177,7 +177,6 @@ typedef struct creep {
     this->y           = y;
     this->x           = x;
     this->created_at  = UNDEFINED;
-    this->target      = UNDEFINED;
     this->state       = ALIVE;
   }
 } CREEP;
@@ -241,6 +240,7 @@ typedef struct cell {
   int baseId;                 //! 基地がある場合はそのID
   int spawnId;                //! スポーン地点の場合はID
   int defenseValue;           //! セルの防御価値(値が高い程守る優先度が高い)
+  set<int> basePaths;         //! どの基地の経路になっているかを調べる
 
   cell(int type = UNDEFINED){
     this->type          = type;
@@ -264,7 +264,7 @@ typedef struct cell {
    * 基地かどうかを返す
    * @return 基地かどうかの判定値
    */
-  bool isBase(){
+  bool isBasePoint(){
     return type == BASE_POINT;
   }
 
@@ -275,6 +275,15 @@ typedef struct cell {
    */
   bool isPath(){
     return type == PATH;
+  }
+
+  /**
+   * @fn [not yet]
+   * 進めるCellかどうかを調べる
+   * @return 進めるCellかどうかの判定値
+   */
+  bool canMove(){
+    return type != PLAIN;
   }
 } CELL;
 
@@ -371,6 +380,20 @@ int g_buildedTowerCount;
  */
 inline int calcZ(int y, int x){
   return y * g_boardHeight + x;
+}
+
+/**
+ * @fn
+ * 2点間のマンハッタン距離を返す
+ * @param (fromY) 起点のY座標
+ * @param (fromX) 起点のX座標
+ * @param (destY) 目的地のY座標
+ * @param (destX) 目的地のX座標
+ *
+ * @return 2点間のマンハッタン距離
+ */
+int calcManhattanDist(int fromY, int fromX, int destY, int destX){
+  return abs(fromY-destY) + abs(fromX-destX);
 }
 
 class PathDefense{
@@ -656,19 +679,20 @@ class PathDefense{
       map<int, bool> checkList;
       SPAWN *spawn = getSpawn(spawnId);
       queue<COORD> que;
-      que.push(COORD(spawn->y, spawn->x));
+      que.push(COORD(spawn->y, spawn->x, 0));
 
       // 前回行動した情報のリセット
       memset(g_prevStep, UNDEFINED, sizeof(g_prevStep));
 
       while(!que.empty()){
+        // 座標情報の取得
         COORD coord = que.front(); que.pop();
 
         // セル情報を取得
         CELL *cell = getCell(coord.y, coord.x);
 
-        // 基地に辿り着いた場合は経路を復元して登録を行う
-        if(cell->type == BASE_POINT){
+        // 基地に辿り着いてそれがマンハッタン距離と同等の場合は経路を復元して登録を行う
+        if(cell->isBasePoint() && coord.dist <= calcManhattanDist(spawn->y, spawn->x, coord.y, coord.x)){
           int baseId = cell->baseId;
           // 最短経路の登録
           registShortestPath(spawnId, baseId);
@@ -680,10 +704,11 @@ class PathDefense{
             int nx = coord.x + DX[direct];
             int nz = calcZ(ny, nx);
 
-            // もしチェックしたセルであれば処理を飛ばす
-            if(isInsideMap(ny, nx) && !checkList[nz]){
+            // 行動出来るセルであれば進む
+            // が、もしチェックしたセルであれば処理を飛ばす
+            if(canMoveCell(ny, nx) && !checkList[nz]){
               checkList[nz] = true;
-              que.push(COORD(ny,nx));
+              que.push(COORD(ny, nx, coord.dist+1));
               g_prevStep[ny][nx] = direct;
             }
           }
@@ -703,18 +728,26 @@ class PathDefense{
       int y = base->y;
       int x = base->x;
 
+      fprintf(stderr,"regist shortest path: %d -> %d\n", spawnId, baseId);
+
+      // 逆算して最短路の登録を行う
       while(y != spawn->y || x != spawn->x){
         int prev = g_prevStep[y][x];
         assert(prev != -1);
         y += DY[(prev+2)%4];
         x += DX[(prev+2)%4];
+
+        CELL *cell = getCell(y,x);
         g_shortestPathMap[y][x][spawnId][baseId] = prev;
+        cell->basePaths.insert(baseId);
       }
     }
 
     /**
      * @fn
-     * セルの作成を行う
+     * Cellの作成を行う
+     *
+     * @return Cell情報
      */
     CELL createCell(){
       CELL cell; 
@@ -724,13 +757,15 @@ class PathDefense{
 
     /**
      * @fn
-     * 敵を作成、敵の出現数を増やす
+     * 敵の作成を行う
      * @param (creepId) creepのID 
      * @param (health)  体力
      * @param (y)       敵のY座標
      * @param (x)       敵のX座標
      *
      * @return 敵情報
+     * @detail
+     * 敵の作成を行い、敵の総数のカウントを1増やす
      */
     CREEP createCreep(int creepId, int health, int y, int x){
       // セル情報の取得
@@ -925,6 +960,25 @@ class PathDefense{
      */
     inline bool isInsideMap(int y, int x){
       return (y >= 0 && x >= 0 && y < g_boardHeight && x < g_boardWidth); 
+    }
+
+    /**
+     * @fn
+     * 指定した座標に移動出来るかどうかを判定
+     *
+     * @param (y) Y座標
+     * @param (x) X座標
+     * 
+     * @return 進めるかどうかの判定値
+     * @detail
+     * マップ内であり、かつ壁ではない場合は進める
+     */
+    bool canMoveCell(int y, int x){
+      if(!isInsideMap(y, x)) return false;
+
+      CELL *cell = getCell(y,x);
+
+      return cell->canMove();
     }
 
     /**
