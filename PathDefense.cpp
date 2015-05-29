@@ -109,8 +109,8 @@ enum BaseState {
 enum TowerState {
 };
 
-/*
- * 座標を表す構造体
+/**
+ * @brief 座標を表す構造体
  */
 typedef struct coord {
   int y;      // Y座標
@@ -125,7 +125,7 @@ typedef struct coord {
 } COORD;
 
 /**
- * 建設情報を表す構造体
+ * @brief 建設情報を表す構造体
  */
 typedef struct buildInfo {
   int towerId;  // タワーID
@@ -139,8 +139,8 @@ typedef struct buildInfo {
   }
 } BUILD_INFO;
 
-/*
- * スポーン地点を表す構造体
+/**
+ * @brief スポーン地点を表す構造体
  */
 typedef struct spawn {
   int id;                 // ID
@@ -156,8 +156,8 @@ typedef struct spawn {
   }
 } SPAWN;
 
-/*
- * 敵を表す構造体
+/**
+ * @brief 敵を表す構造体
  */
 typedef struct creep {
   int id;             // ID
