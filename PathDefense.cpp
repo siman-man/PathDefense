@@ -2,10 +2,10 @@
  * @file    PathDefense.cpp
  * @brief   PathDefenseを解く用の何か
  * @author  siman
- * @date    2015/05/28
+ * @date    2015/05/30
  *
  * @detail
- * 関数横のコメントのタイプ
+ * 関数名の横のコメントのタイプ
  *  [not yet]: まだ実装中
  *    [maybe]: 実装はしたけどバグあるかも or 追加の機能あるかも
  * [complete]: 完璧です
@@ -227,7 +227,7 @@ typedef struct base {
   }
 
   /**
-   * @fn [not yet]
+   * @fn [complete]
    * 破壊されていないかどうかの確認を行う
    *
    * @return 破壊されていないかどうかの判定値
@@ -241,13 +241,13 @@ typedef struct base {
  * @brief タワーを表す構造体
  */
 typedef struct tower {
-  int id;       // ID
-  int y;        // y座標
-  int x;        // x座標
-  int range;    // 射程距離
-  int damage;   // 攻撃力
-  int cost;     // 建設コスト
-  bool locked;  // 敵をロックしているかどうか
+  int id;             // ID
+  int y;              // y座標
+  int x;              // x座標
+  int range;          // 射程距離
+  int damage;         // 攻撃力
+  int cost;           // 建設コスト
+  int lockedCreepId;  // ロックしている敵のID
 
   tower(int id = UNDEFINED, int range = UNDEFINED, int damage = UNDEFINED, int cost = UNDEFINED){
     this->id      = id;
@@ -258,6 +258,26 @@ typedef struct tower {
     // 位置情報は建設時に設定
     this->y       = UNDEFINED;
     this->x       = UNDEFINED;
+  }
+
+  /**
+   * @fn
+   * 情報をリセット
+   *
+   * @detail
+   * - ロックしている敵の情報をリセット
+   */
+  void reset(){
+    lockedCreepId = UNDEFINED;
+  }
+
+  /**
+   * ロックオンしているかどうかを確認
+   *
+   * @return ロックしているかどうかの判定値
+   */
+  bool isLocked(){
+    return lockedCreepId != UNDEFINED;
   }
 } TOWER;
 
