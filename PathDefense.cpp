@@ -54,10 +54,12 @@ const int DX[4] = {  0, -1, 0, 1};
 /**
  * @brief 移動できる方向のマスク
  */
-const int DOWN  = 0; //! 0000
+const int DOWN  = 1; //! 0001
 const int LEFT  = 2; //! 0010
 const int UP    = 4; //! 0100
 const int RIGHT = 8; //! 1000
+
+const int directMask[4] = {DOWN, LEFT, UP, RIGHT};
   
 /**
  * @enum Enum 
@@ -214,9 +216,24 @@ typedef struct base {
     this->state  = SAFETY;
   }
 
-  // 破壊されたかどうかの確認
+  /**
+   * @fn [complete]
+   * 破壊されたかどうかの確認を行う
+   *
+   * @return 破壊されたかどうかの判定値
+   */
   bool isBroken(){
     return health == 0;
+  }
+
+  /**
+   * @fn [not yet]
+   * 破壊されていないかどうかの確認を行う
+   *
+   * @return 破壊されていないかどうかの判定値
+   */
+  bool isNotBroken(){
+    return !isBroken();
   }
 } BASE;
 
@@ -255,6 +272,7 @@ typedef struct cell {
   int coveredCount[MAX_R+1];  //! カバーできる経路の数
   int baseId;                 //! 基地がある場合はそのID
   int spawnId;                //! スポーン地点の場合はID
+  int basicValue;             //! 基礎点
   int defenseValue;           //! セルの防御価値(値が高い程守る優先度が高い)
   set<int> basePaths;         //! どの基地の経路になっているかを調べる
 
@@ -265,6 +283,7 @@ typedef struct cell {
     this->damage        = UNDEFINED;
     this->baseId        = UNDEFINED;
     this->spawnId       = UNDEFINED;
+    this->basicValue    = 0;
     this->defenseValue  = 0;
   }
 
@@ -451,6 +470,9 @@ class PathDefense{
      * @param (money)       初期所持金
      * @param (creepHealth) 敵の初期体力(500ターン毎に倍々で増える)
      * @param (creepMoney)  敵を倒した時に得られるお金
+     *
+     * @detail
+     * ゲームを始めるにあたって必要な情報を初期化しておく
      */
     int init(vector<string> board, int money, int creepHealth, int creepMoney, vector<int> towerType){
       fprintf(stderr,"init =>\n");
@@ -546,7 +568,7 @@ class PathDefense{
 
           // それ以外は基地
           }else{
-            // 基地のIDを取得
+            //! 基地のIDを取得
             int baseId = char2int(board[y][x]);
             cell.type = BASE_POINT;
             cell.baseId = baseId;
@@ -625,11 +647,24 @@ class PathDefense{
     }
 
     /**
+     * @fn [complete]
+     * マップの端までの距離を計算
+     * @param (y) Y座標
+     * @param (x) X座標
+     *
+     * @return マップの端までの距離
+     */
+    int calcDistanceToEdge(int y, int x){
+      return min(min(y, g_boardHeight-y-1), min(x, g_boardWidth-1));
+    }
+
+    /**
      * @fn [not yet]
      * タワーを建設するべきかどうかを調べる
      * 
      * @return 建設するか否かの判定値
-     * @detail なるべく後出しでタワーを建設したいのでギリギリまで建てないようにする
+     * @detail 
+     * なるべく後出しでタワーを建設したいのでギリギリまで建てないようにする
      */
     bool toBuildTower(){
       return true;
@@ -696,7 +731,7 @@ class PathDefense{
     }     
 
     /**
-     * @fn [not yet]
+     * @fn [maybe]
      *   各出現ポイントから基地までの最短経路を計算
      *
      * @detail
@@ -789,7 +824,7 @@ class PathDefense{
         x += DX[(prev+2)%4];
 
         CELL *cell = getCell(y,x);
-        g_shortestPathMap[y][x][baseId] |= (1 << prev);
+        g_shortestPathMap[y][x][baseId] |= directMask[prev];
         cell->basePaths.insert(baseId);
       }
     }
@@ -823,6 +858,8 @@ class PathDefense{
     CREEP createCreep(int creepId, int health, int y, int x){
       // セル情報の取得
       CELL *cell = getCell(y,x);
+
+      // スポーン地点から出現していないとおかしい
       assert(cell->spawnId != UNDEFINED);
 
       SPAWN *spawn = getSpawn(cell->spawnId);
@@ -1142,15 +1179,29 @@ class PathDefense{
 
     /**
      * @fn [not yet]
-     * セルの防御価値を初期化する。
+     * セルの防御価値の基礎点を算出する(この値が高いほど守る価値がある)
      *
      * @detail
      *   - 基地の周りのセルの防御価値は高い
      */
-    void initCellDefenseValue(){
+    void initCellBasicValue(){
       // 各基地に対して処理を行う
       for(int baseId = 0; baseId < g_baseCount; baseId++){
       }
+    }
+
+    /**
+     * @fn [not yet]
+     * タワーが倒された時に守る必要が無くなった経路を探す
+     * @param (baseId) 倒された基地ID
+     *
+     * @detail
+     * 倒されたタワーによって経路が永久に塞がれているものを探す
+     */
+    void updateDeadPathInfo(int baseId){
+      BASE *base = getBase(baseId);
+      // 破壊されていない基地が来るのはおかしい
+      assert(base->isBroken());
     }
 
     /**
@@ -1199,14 +1250,34 @@ class PathDefense{
      */
     void putFootPrint(int y, int x, int baseId, int limit){
       BASE *base = getBase(baseId);
-      CELL *cell = getCell(y, x);
       map<int, bool> checkList;
       queue<COORD> que;
       que.push(COORD(y, x, 0));
       int dist = 0;
 
       while(!que.empty()){
-        int direct = g_shortestPathMap[cell->y][cell->x][baseId];
+        COORD coord = que.front(); que.pop();
+
+        // 制限距離を超えていた場合はスキップ
+        if(coord.dist > limit) continue;
+
+        int z = calcZ(coord.y, coord.x);
+        // 既に訪れていた場合はスキップ
+        if(checkList[z]) continue;
+        checkList[z] = true;
+
+        CELL *cell = getCell(coord.y, coord.x);
+        cell->defenseValue += 1;
+
+        for(int direct = 0; direct < 4; direct++){
+          // もし行動可能であれば追加
+          if(g_shortestPathMap[cell->y][cell->x][baseId] & directMask[direct]){
+            int ny = cell->y + DY[direct];
+            int nx = cell->x + DX[direct];
+
+            que.push(COORD(ny, nx, coord.dist+1));
+          }
+        }
       }
     }
 
@@ -1215,7 +1286,6 @@ class PathDefense{
      * 防御価値を設定(基地周辺)
      * @param (baseId) 基地ID
      *
-     * @sa initCellDefenseValue
      * @detail
      * 幅優先である範囲は優先度を高くする
      */
