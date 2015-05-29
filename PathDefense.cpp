@@ -3,6 +3,12 @@
  * @brief   PathDefenseを解く用の何か
  * @author  siman
  * @date    2015/05/28
+ *
+ * @detail
+ * 関数横のコメントのタイプ
+ *  [not yet]: まだ実装中
+ *    [maybe]: 実装はしたけどバグあるかも or 追加の機能あるかも
+ * [complete]: 完璧です
  */
 #include <iostream>
 #include <vector>
@@ -251,7 +257,7 @@ typedef struct cell {
   }
 
   /**
-   * @fn
+   * @fn [complete]
    * 平地かどうかを返す
    * @return 平地かどうかの判定値
    */
@@ -260,7 +266,7 @@ typedef struct cell {
   }
 
   /**
-   * @fn
+   * @fn [complete]
    * 基地かどうかを返す
    * @return 基地かどうかの判定値
    */
@@ -269,7 +275,7 @@ typedef struct cell {
   }
 
   /**
-   * @fn
+   * @fn [complete]
    * 経路かどうかを返す
    * @return 経路かどうかの判定値
    */
@@ -278,7 +284,7 @@ typedef struct cell {
   }
 
   /**
-   * @fn [not yet]
+   * @fn [complete]
    * 進めるCellかどうかを調べる
    * @return 進めるCellかどうかの判定値
    */
@@ -288,7 +294,7 @@ typedef struct cell {
 } CELL;
 
 /**
- * @fn
+ * @fn [complete]
  * 文字を数値に変える関数
  * @param (ch) 変換したい文字
  *
@@ -299,7 +305,7 @@ int char2int(char ch){
 }
 
 /**
- * @fn
+ * @fn [complete]
  * 2点間の大雑把な距離を計算
  * @param (fromY) 出発地点のy座標
  * @param (fromX) 出発地点のx座標
@@ -371,7 +377,7 @@ int g_prevStep[MAX_N][MAX_N];
 int g_buildedTowerCount;
 
 /**
- * @fn
+ * @fn [complete]
  * (y,x)を1次元に直した場合の値を出す
  * @param (y) Y座標
  * @param (x) X座標
@@ -383,7 +389,7 @@ inline int calcZ(int y, int x){
 }
 
 /**
- * @fn
+ * @fn [complete]
  * 2点間のマンハッタン距離を返す
  * @param (fromY) 起点のY座標
  * @param (fromX) 起点のX座標
@@ -448,7 +454,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * ゲームの基礎情報を表示
      *   - 敵の基礎体力
      *   - 敵を倒した時の報酬
@@ -462,7 +468,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * ボードの初期化
      * @param (board) 初期ボード
      */
@@ -518,7 +524,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * カバー出来る経路の数を初期化
      */
     void initCoveredCellCount(){
@@ -540,7 +546,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * タワー情報の初期化を行う
      * @param (towerType) タワーの情報が格納されているリスト
      */
@@ -566,7 +572,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [complete]
      * マップの端っこかどうかを調べる
      * @param (y) Y座標
      * @param (x) X座標
@@ -666,7 +672,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * 出現ポイントから基地までの最短経路を出す
      * @param (spawnY) スポーン地点のY座標
      * @param (spawnX) スポーン地点のX座標
@@ -717,7 +723,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * 最短経路の登録を行う
      * @param (spawnId) スポーン地点のID
      * @param (baseId)  基地のID
@@ -744,7 +750,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * Cellの作成を行う
      *
      * @return Cell情報
@@ -756,7 +762,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * 敵の作成を行う
      * @param (creepId) creepのID 
      * @param (health)  体力
@@ -793,7 +799,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * 基地を作成する
      * @param (baseId) baseのID
      * @param (y)      基地のY座標
@@ -809,7 +815,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * タワーの作成を行う(初期化時のみ使用)
      * @param (towerId) タワーのID
      * @param (range)   攻撃範囲
@@ -825,7 +831,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * スポーン地点の追加を行う
      * @param (spawnId) スポーンID
      * @param (y)       Y座標
@@ -842,7 +848,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * タワー情報の表示
      * @param (towerId) タワーID
      */
@@ -855,7 +861,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * タワーの建設を行う(ゲーム中に使用)
      * @param (towerId) 建設するタワーの種類
      * @param (y)       建設を行うY座標
@@ -878,7 +884,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [complete]
      * 指定したIDの基地を取得する
      * @param (baseId) 基地ID
      *
@@ -889,7 +895,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [complete]
      * 指定したIDの敵を取得する
      * @param (creepId) 敵ID
      *
@@ -917,7 +923,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [complete]
      * 指定したIDのタワー情報を取得
      * @param (towerId) タワーID
      *
@@ -928,7 +934,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [complete]
      * スポーン地点の取得
      * @param (spawnId) スポーンID
      * 
@@ -939,7 +945,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [complete]
      * 指定した座標のセル情報を取得する
      * @param (y) Y座標
      * @param (x) X座標
@@ -951,7 +957,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [complete]
      * マップの内側にいるかどうかをチェック
      * @param (y) Y座標
      * @param (x) X座標
@@ -963,7 +969,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [complete]
      * 指定した座標に移動出来るかどうかを判定
      *
      * @param (y) Y座標
@@ -982,7 +988,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [complete]
      * 画面外に出ていないかをチェック
      * @param (y) Y座標
      * @param (x) X座標
@@ -994,7 +1000,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [complete]
      * タワーが建設可能かどうかを調べる
      * @param (towerId) 建設したいタワーのID
      * @param (y)       Y座標
@@ -1039,7 +1045,7 @@ class PathDefense{
      * @param (creeps) 敵の情報リスト
      */
     void updateCreepsData(vector<int> &creeps){
-      // 敵の数
+      //! 敵の数
       int creepCount = creeps.size() / 4;
 
       // 各敵情報を更新する
@@ -1066,7 +1072,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * 基地情報の更新を行う
      * @param (baseHealth) 基地の体力情報のリスト
      */
@@ -1162,7 +1168,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * ゲーム中、毎回呼ばれる関数
      * @param (creeps)     敵の情報リスト
      * @param (money)      現在の所持金
@@ -1184,7 +1190,7 @@ class PathDefense{
     }
 
     /**
-     * @fn
+     * @fn [maybe]
      * ある地点から生存中の敵で一番近い敵のIDを返す
      * @param (fromY) 出発地点のy座標
      * @param (fromX) 出発地点のx座標
