@@ -50,6 +50,14 @@ const int LIMIT_TURN       = 2000;   //! ターンの上限
  */
 const int DY[4] = { 1, 0, -1, 0 };
 const int DX[4] = {  0, -1, 0, 1};
+
+/**
+ * @brief 移動できる方向のマスク
+ */
+const int DOWN  = 0; //! 0000
+const int LEFT  = 2; //! 0010
+const int UP    = 4; //! 0100
+const int RIGHT = 8; //! 1000
   
 /**
  * @enum Enum 
@@ -241,6 +249,8 @@ typedef struct tower {
  */
 typedef struct cell {
   int type;                   //! Cellのタイプ
+  int y;                      //! Y座標
+  int x;                      //! X座標
   int damage;                 //! この場所で与えられる最大ダメージ
   int coveredCount[MAX_R+1];  //! カバーできる経路の数
   int baseId;                 //! 基地がある場合はそのID
@@ -248,7 +258,9 @@ typedef struct cell {
   int defenseValue;           //! セルの防御価値(値が高い程守る優先度が高い)
   set<int> basePaths;         //! どの基地の経路になっているかを調べる
 
-  cell(int type = UNDEFINED){
+  cell(int y = UNDEFINED, int x = UNDEFINED, int type = UNDEFINED){
+    this->y             = y;
+    this->x             = x;
     this->type          = type;
     this->damage        = UNDEFINED;
     this->baseId        = UNDEFINED;
@@ -367,8 +379,16 @@ int g_boardHeight;
 //! 今までに出現した敵の総数
 int g_totalCreepCount;
 
-//! 最短路を得るためのマップ
-int g_shortestPathMap[MAX_N][MAX_N][MAX_B*10+1][MAX_B+1];
+/** 
+ * @brief 最短路を得るためのマップ
+ * [y][x][baseId] - その基地に向かうための方向がわかる
+ *
+ * @detail
+ * 数値のフラグで管理
+ * - 0000の場合はどこにも進めない
+ * - 1111は全方向進める
+ */
+int g_shortestPathMap[MAX_N][MAX_N][MAX_B+1];
 
 //! 基地のリスト
 BASE g_baseList[MAX_B];
@@ -441,6 +461,9 @@ class PathDefense{
       // 出現した敵の総数を初期化
       g_totalCreepCount = 0;
 
+      // 最短路マップの初期化
+      memset(g_shortestPathMap, 0, sizeof(g_shortestPathMap));
+
       // ボードの初期化を行う
       initBoardData(board);
 
@@ -501,7 +524,7 @@ class PathDefense{
       // ボードの初期化
       for(int y = 0; y < g_boardHeight; y++){
         for(int x = 0; x < g_boardWidth; x++){
-          CELL cell = createCell();
+          CELL cell = createCell(y, x);
 
           // '#'は平地
           if(board[y][x] == '#'){
@@ -766,7 +789,7 @@ class PathDefense{
         x += DX[(prev+2)%4];
 
         CELL *cell = getCell(y,x);
-        g_shortestPathMap[y][x][spawnId][baseId] = prev;
+        g_shortestPathMap[y][x][baseId] |= (1 << prev);
         cell->basePaths.insert(baseId);
       }
     }
@@ -774,11 +797,13 @@ class PathDefense{
     /**
      * @fn [maybe]
      * Cellの作成を行う
+     * @param (y) Y座標
+     * @param (x) X座標
      *
      * @return Cell情報
      */
-    CELL createCell(){
-      CELL cell; 
+    CELL createCell(int y, int x){
+      CELL cell(y, x); 
 
       return cell;
     }
@@ -1170,15 +1195,18 @@ class PathDefense{
      *
      * @sa setCreepMovePathValue
      * @detail
-     * 基地までの足跡をつける
+     * 基地までの足跡をつける(そのまま評価値に反映)
      */
     void putFootPrint(int y, int x, int baseId, int limit){
       BASE *base = getBase(baseId);
       CELL *cell = getCell(y, x);
+      map<int, bool> checkList;
+      queue<COORD> que;
+      que.push(COORD(y, x, 0));
       int dist = 0;
 
-      // 制限距離を超えるか、基地に到達するまで繰り返す
-      while(dist <= limit && cell->isNotBasePoint()){
+      while(!que.empty()){
+        int direct = g_shortestPathMap[cell->y][cell->x][baseId];
       }
     }
 
