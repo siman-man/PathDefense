@@ -1109,6 +1109,7 @@ class PathDefense{
      *
      * @detail
      *   - 所持金の更新
+     *   - 防御価値のリセット
      *   - 敵情報の更新
      *   - 基地情報の更新
      */
@@ -1116,11 +1117,29 @@ class PathDefense{
       // 現在の所持金の更新
       g_currentAmountMoney = money;
 
+      // 各Cellの防御価値をリセット
+      resetCellDefenseValue();
+
       // 敵情報の更新
       updateCreepsData(creeps);
 
       // 基地情報の更新
       updateBasesData(baseHealth);
+    }
+
+    /**
+     * @fn [not yet]
+     * Cellの防御価値をリセット
+     */
+    void resetCellDefenseValue(){
+      // 全てのCellに対して処理を行う
+      for(int y = 0; y < g_boardHeight; y++){
+        for(int x = 0; x < g_boardWidth; x++){
+          CELL *cell = getCell(y,x);
+          // 防御価値を0に初期化する
+          cell->defenseValue = 0;
+        }
+      }
     }
 
     /**
@@ -1187,6 +1206,13 @@ class PathDefense{
     void initCellBasicValue(){
       // 各基地に対して処理を行う
       for(int baseId = 0; baseId < g_baseCount; baseId++){
+        BASE *base = getBase(baseId);
+        CELL *cell = getCell(base->y, base->x);
+
+        // マップの端までの距離が一定ラインを以下の場合は価値を下げる
+        if(calcDistanceToEdge(base->y, base->x) <= 5){
+          cell->basicValue -= 1;
+        }
       }
     }
 
@@ -1287,9 +1313,10 @@ class PathDefense{
      * @param (baseId) 基地ID
      *
      * @detail
-     * 幅優先である範囲は優先度を高くする
+     * 基地周辺の防御価値を高くする
      */
     void setBaseDefenseValue(int baseId){
+      //! 基地周辺の距離
       int LIMIT = 5;
       BASE *base = getBase(baseId);
       map<int, bool> checkList;
@@ -1299,6 +1326,9 @@ class PathDefense{
       while(!que.empty()){
         COORD coord = que.front(); que.pop();
         int z = calcZ(coord.y, coord.x);
+
+        // LIMITを越えた場合はスキップ
+        if(coord.dist > LIMIT) continue;
 
         // 既に訪れていた場合はスキップ
         if(checkList[z]) continue;
