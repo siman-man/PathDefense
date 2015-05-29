@@ -146,6 +146,7 @@ typedef struct spawn {
   int id;                 // ID
   int y;                  // Y座標
   int x;                  // X座標
+  set<int> targetBases;    // 狙っている基地のリスト(候補が1つとは限らない)
   int popUpCreepCount;    // 出現した敵の数
 
   spawn(int id = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
@@ -463,7 +464,7 @@ class PathDefense{
           }else if(board[y][x] == '.'){
             cell.type = PATH;
             // マップの端であればスポーン地点の追加を行う
-            if(y == 0 || x == 0 || y == g_boardHeight-1 || x == g_boardWidth-1){
+            if(isEdgeOfMap(y,x)){
               int spawnId = g_spawnList.size();
               // cellのタイプをスポーン地点で上書き
               cell.type = SPAWN_POINT;
@@ -542,6 +543,18 @@ class PathDefense{
     }
 
     /**
+     * @fn
+     * マップの端っこかどうかを調べる
+     * @param (y) Y座標
+     * @param (x) X座標
+     *
+     * @return マップの端かどうかの判定値
+     */
+    bool isEdgeOfMap(int y, int x){
+      return (y == 0 || x == 0 || y == g_boardHeight-1 || x == g_boardWidth-1);
+    }
+
+    /**
      * @fn [not yet]
      * タワーを建設するべきかどうかを調べる
      * 
@@ -603,6 +616,8 @@ class PathDefense{
      *
      * @sa canReachBasePoint
      * @return どこかの基地に到達できるかどうかの判定値
+     * @detail
+     * 現在のタワーの建設状態から何もしなくても敵を倒せるのかどうかを調べる
      */
     bool isAnyBaseReachable(int fromY, int fromX, int health){
       // 全ての基地に対して実行を行う
@@ -613,6 +628,10 @@ class PathDefense{
     /**
      * @fn [not yet]
      *   各出現ポイントから基地までの最短経路を計算
+     *
+     * @detail
+     * 最短経路を計算しておき、敵が出現した際に狙われる基地をリストアップ出来るように
+     * しておく。ここでの最短経路は「マンハッタン距離」より長くならない経路を指す
      */
     void initSpawnToBaseShortestPath(){
       int spawnCount = g_spawnList.size();
@@ -629,7 +648,9 @@ class PathDefense{
      * @param (spawnY) スポーン地点のY座標
      * @param (spawnX) スポーン地点のX座標
      * @sa initSpawnToBaseShortestPath
-     * @detail 最短距離は幅優先探索で出す
+     *
+     * @detail 
+     * 最短距離は幅優先探索で出す
      */
     void calcSpawnToBaseShortestPath(int spawnId){
       map<int, bool> checkList;
@@ -642,11 +663,6 @@ class PathDefense{
 
       while(!que.empty()){
         COORD coord = que.front(); que.pop();
-        int z = calcZ(coord.y, coord.x);
-
-        // もしチェックしたセルであれば処理を飛ばす
-        if(checkList[z]) continue;
-        checkList[z] = true;
 
         // セル情報を取得
         CELL *cell = getCell(coord.y, coord.x);
@@ -656,13 +672,17 @@ class PathDefense{
           int baseId = cell->baseId;
           // 最短経路の登録
           registShortestPath(spawnId, baseId);
+          // スポーン地点の候補基地リストに追加
+          spawn->targetBases.insert(baseId);
         }else{
           for(int direct = 0; direct < 4; direct++){
             int ny = coord.y + DY[direct];
             int nx = coord.x + DX[direct];
             int nz = calcZ(ny, nx);
 
+            // もしチェックしたセルであれば処理を飛ばす
             if(isInsideMap(ny, nx) && !checkList[nz]){
+              checkList[nz] = true;
               que.push(COORD(ny,nx));
               g_prevStep[ny][nx] = direct;
             }
@@ -775,6 +795,9 @@ class PathDefense{
      * @param (spawnId) スポーンID
      * @param (y)       Y座標
      * @param (x)       X座標
+     * 
+     * @detail
+     * 出現ポイントの追加
      */
     void addSpawnPoint(int spawnId, int y, int x){
       SPAWN spawn(spawnId, y, x);
@@ -1032,6 +1055,18 @@ class PathDefense{
      * @detail
      */
     int updateCellDefeseValue(){
+    }
+
+    /**
+     * @fn [not yet]
+     * 敵の予測経路のポイントを高くする
+     * @param (creepId) 敵のID
+     * 
+     * @detail
+     * 敵が行動する経路を計算して、その部分の防御優先度を高くする
+     */
+    void setCreepMovePathValue(int creepId){
+      CREEP *creep = getCreep(creepId);
     }
 
     /**
