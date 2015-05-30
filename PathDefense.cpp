@@ -34,6 +34,7 @@ typedef long long ll;
 
 const int UNDEFINED        = -1;     //! 値が未定義
 const int UNLOCK           = -1;     //! 敵をロックしていない状態
+const int NOT_FOUND        = -1;     //! 敵を見つけたか見つけてないかの判定
 const int MAX_N            = 60 + 2; //! ボードの最大長(番兵込み)
 const int MAX_Z            = 2015;   //! 敵の最大数(実際は2000が最大)
 const int MAX_B            = 10;     //! 基地の最大数(実際は8が最大)
@@ -184,10 +185,12 @@ typedef struct creep {
   int health;         // 体力
   int y;              // y座標
   int x;              // x座標
+  int prevY;          // 前のターンに居たY座標
+  int prevX;          // 前のターンに居たX座標
   int created_at;     // 出現時のターン数
   int disappeared_at; // 消失時のターン数
   int targetBases;    // 狙っている基地候補(1つとは限らない)
-  int state;          // 敵の状態
+  CreepState state;   // 敵の状態
 
   // 初期化
   creep(int id = UNDEFINED, int health = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
@@ -195,6 +198,8 @@ typedef struct creep {
     this->health      = health;
     this->y           = y;
     this->x           = x;
+    this->prevY       = UNDEFINED;
+    this->prevX       = UNDEFINED;
     this->created_at  = UNDEFINED;
     this->state       = ALIVE;
   }
@@ -204,11 +209,11 @@ typedef struct creep {
  * 基地を表す構造体
  */
 typedef struct base {
-  int id;         // ID
-  int health;     // 体力
-  int y;          // y座標
-  int x;          // x座標
-  int state;      // 基地の状態
+  int id;           // ID
+  int health;       // 体力
+  int y;            // y座標
+  int x;            // x座標
+  BaseState state;  // 基地の状態
 
   // 初期化
   base(int id = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
@@ -271,16 +276,17 @@ typedef struct tower {
    * - ロックしている敵の情報をリセット
    */
   void reset(){
-    lockedCreepId = UNDEFINED;
+    lockedCreepId = NOT_FOUND;
   }
 
   /**
+   * @fn
    * ロックオンしているかどうかを確認
    *
    * @return ロックしているかどうかの判定値
    */
   bool isLocked(){
-    return lockedCreepId != UNDEFINED;
+    return lockedCreepId != NOT_FOUND;
   }
 } TOWER;
 
@@ -374,6 +380,17 @@ typedef struct cell {
  */
 int char2int(char ch){
   return ch - '0';
+}
+
+/**
+ * @fn [complete]
+ * @return 乱数
+ */
+unsigned long long xor128(){
+  static unsigned long long rx=123456789, ry=362436069, rz=521288629, rw=88675123;
+  unsigned long long rt = (rx ^ (rx<<11));
+  rx=ry; ry=rz; rz=rw;
+  return (rw=(rw^(rw>>19))^(rt^(rt>>8)));
 }
 
 /**
@@ -527,6 +544,9 @@ class PathDefense{
       // 建設したタワーの数を初期化
       g_buildedTowerCount = 0;
 
+      // 基地の数を初期化
+      g_baseCount = 0;
+
       // 報酬の初期化
       g_reward = creepMoney;
 
@@ -598,6 +618,9 @@ class PathDefense{
 
             // 基地を作成
             BASE base = createBase(baseId, y, x);
+
+            // 基地の数を更新
+            g_baseCount += 1;
 
             // 基地リストに入れる
             g_baseList[baseId] = base;
@@ -1146,10 +1169,14 @@ class PathDefense{
       // 各Cellの防御価値をリセット
       resetCellDefenseValue();
 
-      // 各タワー情報をリセット
-
       // 敵情報の更新
       updateCreepsData(creeps);
+
+      // 仮想的に敵を行動させる
+      moveCreeps();
+
+      // 各タワー情報をリセット
+      updateTowerData();
 
       // 基地情報の更新
       updateBasesData(baseHealth);
@@ -1226,6 +1253,8 @@ class PathDefense{
         }else{
           // そうでない場合は各値を更新
           creep->health = health;
+          creep->prevY  = creep->y;
+          creep->prevX  = creep->x;
           creep->y      = y;
           creep->x      = x;
         }
@@ -1237,23 +1266,90 @@ class PathDefense{
 
     /**
      * @fn [maybe]
+     * 仮想的に敵を行動させる
+     *
+     * @detail
+     * ボードのシミュレート予測を向上させる
+     */
+    void moveCreeps(){
+      set<int>::iterator it = g_aliveCreepsIdList.begin();
+      // トライする回数
+      int tryLimit = 10;
+      int ny, nx;
+
+      // 生存中の全ての敵が行動する
+      while(it != g_aliveCreepsIdList.end()){
+        int tryCount = 0;
+        int creepId = (*it);
+        CREEP *creep = getCreep(creepId);
+
+        do {
+          tryCount += 1;
+          int direct = xor128() % 4;
+          ny = creep->y + DY[direct];
+          nx = creep->x + DX[direct];
+
+          if(tryCount > tryLimit) break;
+        }while(!canMoveCell(ny, nx) || (ny != creep->prevY && nx != creep->prevX));
+
+        it++;
+      }
+    }
+
+    /**
+     * @fn [maybe]
+     * タワー情報の更新を行う
+     * 
+     * @detail
+     * 主に次にロックする敵を決める
+     */
+    void updateTowerData(){
+      for(int towerId = 0; towerId < g_buildedTowerCount; towerId++){
+        TOWER *tower = getTower(towerId);
+
+        int creepId = searchMostNearCreepId(tower->y, tower->x);
+
+        // 敵が見つかった場合はそれをロック
+        if(creepId != NOT_FOUND){
+          fprintf(stderr,"tower locked %d\n", creepId);
+          tower->lockedCreepId = creepId;
+        }
+      }
+    }
+
+    /**
+     * @fn [maybe]
      * 基地情報の更新を行う
      * @param (baseHealth) 基地の体力情報のリスト
+     *
+     * @detail
+     * 基地情報の更新、体力が0になった基地は状態を「BROKEN」に変更
      */
     void updateBasesData(vector<int> &baseHealth){
-      // 基地の数
-      g_baseCount = baseHealth.size();
 
       // 各基地の体力を更新
       for(int baseId = 0; baseId < g_baseCount; baseId++){
         BASE *base = getBase(baseId);
 
+        // 体力を更新する
         base->health = baseHealth[baseId];
 
-        // もし体力が0になっていた場合、状態を「破壊された」に変更
-        if(base->isBroken()){
-          base->state = BROKEN;
-        }
+        updateBaseState(base);
+      }
+    }
+
+    /**
+     * @fn [maybe]
+     * 基地の状態の更新を行う
+     * @param (base) 基地の情報ポインタ
+     *
+     * @detail
+     *   - 体力が0の基地は「破壊状態」に移行
+     */
+    void updateBaseState(BASE *base){
+      // もし体力が0になっていた場合、状態を「破壊された(BROKEN)」に変更
+      if(base->isBroken()){
+        base->state = BROKEN;
       }
     }
 
@@ -1442,7 +1538,7 @@ class PathDefense{
      * タワーが敵をロックするときに使う
      */
     int searchMostNearCreepId(int fromY, int fromX){
-      int mostNearCreepId = UNDEFINED;
+      int mostNearCreepId = NOT_FOUND;
       int roughDist;
       int minDist = INT_MAX;
 
