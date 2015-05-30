@@ -203,6 +203,16 @@ typedef struct creep {
     this->created_at  = UNDEFINED;
     this->state       = ALIVE;
   }
+
+  /**
+   * @fn [not yet]
+   * 倒されたかどうかの判定
+   *
+   * @return 倒されたかどうかの判定値
+   */
+  bool isDead(){
+    return health <= 0;
+  }
 } CREEP;
 
 /*
@@ -1166,6 +1176,9 @@ class PathDefense{
       // 現在の所持金の更新
       g_currentAmountMoney = money;
 
+      // タワー情報のリセット
+      resetTowerData();
+
       // 各Cellの防御価値をリセット
       resetCellDefenseValue();
 
@@ -1175,8 +1188,11 @@ class PathDefense{
       // 仮想的に敵を行動させる
       moveCreeps();
 
-      // 各タワー情報をリセット
+      // 各タワー情報の更新
       updateTowerData();
+
+      // タワー攻撃
+      attackTowers();
 
       // 基地情報の更新
       updateBasesData(baseHealth);
@@ -1293,6 +1309,37 @@ class PathDefense{
         }while(!canMoveCell(ny, nx) || (ny != creep->prevY && nx != creep->prevX));
 
         it++;
+      }
+    }
+
+    /**
+     * @fn
+     * 敵に対して攻撃を行う
+     */
+    void attack(int creepId, int damage){
+      CREEP *creep = getCreep(creepId);
+      
+      // 敵に攻撃
+      creep->health -= damage;
+
+      // もしHPが0以下の場合は倒した
+      if(creep->isDead()){
+        creep->state = DEAD;
+      }
+    }
+
+    /**
+     * @fn
+     * タワーが敵に対して攻撃
+     */
+    void attackTowers(){
+      for(int towerId = 0; towerId < g_buildedTowerCount; towerId++){
+        TOWER *tower = getTower(towerId);
+
+        // 敵をロックしていた場合攻撃
+        if(tower->isLocked()){
+          attack(tower->lockedCreepId, tower->damage);
+        }
       }
     }
 
