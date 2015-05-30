@@ -9,6 +9,8 @@
  *  [not yet]: まだ実装中
  *    [maybe]: 実装はしたけどバグあるかも or 追加の機能あるかも
  * [complete]: 完璧です
+ *
+ * 細かい戦略についてはREADME.mdに残すつもり
  */
 #include <iostream>
 #include <vector>
@@ -31,6 +33,7 @@ using namespace std;
 typedef long long ll;
 
 const int UNDEFINED        = -1;     //! 値が未定義
+const int UNLOCK           = -1;     //! 敵をロックしていない状態
 const int MAX_N            = 60 + 2; //! ボードの最大長(番兵込み)
 const int MAX_Z            = 2015;   //! 敵の最大数(実際は2000が最大)
 const int MAX_B            = 10;     //! 基地の最大数(実際は8が最大)
@@ -46,10 +49,10 @@ const int LIMIT_TURN       = 2000;   //! ターンの上限
  *         ↑
  *     1 ←   → 3
  *         ↓
- *         0
+ *          0
  */
 const int DY[4] = { 1, 0, -1, 0 };
-const int DX[4] = {  0, -1, 0, 1};
+const int DX[4] = { 0, -1, 0, 1 };
 
 /**
  * @brief 移動できる方向のマスク
@@ -436,7 +439,7 @@ BASE g_baseList[MAX_B];
 CREEP g_creepList[MAX_Z];
 
 //! 生存中の敵のIDリスト
-set<int> g_aliveCreepIdList;
+set<int> g_aliveCreepsIdList;
 
 //! タワーのリスト
 TOWER g_towerList[MAX_T];
@@ -444,14 +447,14 @@ TOWER g_towerList[MAX_T];
 //! 建設済みのタワーリスト
 vector<TOWER> g_buildedTowerList;
 
+//! 建設済みのタワーの数
+int g_buildedTowerCount;
+
 //! スポーン地点のリスト
 vector<SPAWN> g_spawnList;
 
 //! 前に行動したstepを覚える配列
 int g_prevStep[MAX_N][MAX_N];
-
-//! 建設したタワーの数
-int g_buildedTowerCount;
 
 /**
  * @fn [complete]
@@ -981,6 +984,9 @@ class PathDefense{
       // 建設したタワーリストに追加
       g_buildedTowerList.push_back(tower);
 
+      // 建設したタワーの数を更新
+      g_buildedTowerCount += 1;
+
       // 建設情報の追加
       m_buildTowerData.push_back(tower.x);
       m_buildTowerData.push_back(tower.y);
@@ -1140,6 +1146,8 @@ class PathDefense{
       // 各Cellの防御価値をリセット
       resetCellDefenseValue();
 
+      // 各タワー情報をリセット
+
       // 敵情報の更新
       updateCreepsData(creeps);
 
@@ -1148,14 +1156,21 @@ class PathDefense{
     }
 
     /**
-     * @fn [not yet]
+     * @fn [maybe]
      * Cellの防御価値をリセット
+     *
+     * @detail
+     * 毎ターン防御価値は変化するので初期化を行っておく、基礎点は変えない
      */
     void resetCellDefenseValue(){
       // 全てのCellに対して処理を行う
       for(int y = 0; y < g_boardHeight; y++){
         for(int x = 0; x < g_boardWidth; x++){
           CELL *cell = getCell(y,x);
+
+          // 平地はリセットしない(する意味が無い)
+          if(cell->isPlain()) continue;
+
           // 防御価値を0に初期化する
           cell->defenseValue = 0;
         }
@@ -1164,12 +1179,35 @@ class PathDefense{
 
     /**
      * @fn
+     * Towerの情報をリセット
+     *
+     * @detail
+     * ロックしている敵を解除
+     */
+    void resetTowerData(){
+      // 全てのタワーに対して処理を行う
+      for(int towerId = 0; towerId < g_buildedTowerCount; towerId++){
+        TOWER *tower = getTower(towerId);
+
+        // ロック情報を解除
+        tower->lockedCreepId = UNLOCK;
+      }
+    }
+
+    /**
+     * @fn
      * 敵情報の更新
      * @param (creeps) 敵の情報リスト
+     *
+     * @detail
+     * 敵の生存リストを更新
      */
     void updateCreepsData(vector<int> &creeps){
       //! 敵の数
       int creepCount = creeps.size() / 4;
+
+      // 生存中の敵リストをリセット
+      g_aliveCreepsIdList.clear();
 
       // 各敵情報を更新する
       for(int i = 0; i < creepCount; i++){
@@ -1191,6 +1229,9 @@ class PathDefense{
           creep->y      = y;
           creep->x      = x;
         }
+
+        // 生存中の敵リストに追加
+        g_aliveCreepsIdList.insert(creepId);
       }
     }
 
@@ -1397,16 +1438,18 @@ class PathDefense{
      * @param (fromX) 出発地点のx座標
      *
      * @return 一番近い敵のID
+     * @detail
+     * タワーが敵をロックするときに使う
      */
     int searchMostNearCreepId(int fromY, int fromX){
       int mostNearCreepId = UNDEFINED;
       int roughDist;
       int minDist = INT_MAX;
 
-      set<int>::iterator it = g_aliveCreepIdList.begin();
+      set<int>::iterator it = g_aliveCreepsIdList.begin();
 
       // 生存中の敵をそれぞれ処理
-      while(it != g_aliveCreepIdList.end()){
+      while(it != g_aliveCreepsIdList.end()){
         int creepId = (*it);
         CREEP *creep = getCreep(creepId);
 
