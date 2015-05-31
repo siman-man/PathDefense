@@ -79,6 +79,9 @@ enum CellType{
   //! 拠点(BASE_POINT)
   BASE_POINT,
 
+  //! タワー(TOWER_POINT
+  TOWER_POINT,
+
   //! 平地(PLAIN)
   PLAIN,
 
@@ -148,14 +151,14 @@ typedef struct coord {
  * @brief 建設情報を表す構造体
  */
 typedef struct buildInfo {
-  int towerId;  // タワーID
-  int y;        // Y座標
-  int x;        // X座標
+  int type;  // タワーの種別
+  int y;          // Y座標
+  int x;          // X座標
 
-  buildInfo(int towerId = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
-    this->towerId = towerId;
-    this->y       = y;
-    this->x       = x;
+  buildInfo(int type = UNDEFINED, int y = UNDEFINED, int x = UNDEFINED){
+    this->type = type;
+    this->y    = y;
+    this->x    = x;
   }
 } BUILD_INFO;
 
@@ -284,7 +287,6 @@ typedef struct tower {
   int lockedCreepId;  // ロックしている敵のID
 
   tower(int type = UNDEFINED, int range = UNDEFINED, int damage = UNDEFINED, int cost = UNDEFINED){
-    this->id      = id;
     this->type    = type;
     this->range   = range;
     this->damage  = damage;
@@ -753,7 +755,7 @@ class PathDefense{
       int bestValue = INT_MIN;
       int bestY;
       int bestX;
-      int bestId;
+      int bestType;
 
       // マップ全体に対して処理を行う
       for(int y = 0; y < g_boardHeight; y++){
@@ -764,17 +766,16 @@ class PathDefense{
           // 平地以外は処理を飛ばす
           if(!cell->isPlain()) continue;
 
-
           // 全てのタワーで処理を行う
-          for(int towerId = 0; towerId < g_towerCount; towerId++){
-            TOWER *tower = getTower(towerId);
+          for(int towerType = 0; towerType < g_towerCount; towerType++){
+            TOWER *tower = referTower(towerType);
             int coveredCount = calcCoveredCellCount(y, x, tower->range);
-            int value = coveredCount;
+            int value = coveredCount + cell->basicValue + cell->defenseValue;
 
             // 評価値が更新されたら建設情報を更新
             if(bestValue < value){
               bestValue = value;
-              bestId = towerId;
+              bestType = towerType;
               bestY = y;
               bestX = x;
             }
@@ -782,7 +783,7 @@ class PathDefense{
         }
       }
 
-      return BUILD_INFO(bestId, bestY, bestX);
+      return BUILD_INFO(bestType, bestY, bestX);
     }
 
     /**
@@ -799,8 +800,23 @@ class PathDefense{
       // 全ての敵に対して処理する
       while(it != g_aliveCreepsIdList.end()){
         int creepId = (*it);
+        CREEP *creep = getCreep(creepId);
+        CELL *cell = getCell(creep->y, creep->x);
+
+        set<int>::iterator that = cell->basePaths.begin();
+
+        while(that != cell->basePaths.end()){
+          int baseId = (*that);
+          if(canReachBasePoint(creep->id, baseId)){
+            return true;
+          }
+          that++;
+        }
+
         it++;
       }
+
+      return false;
     }     
 
     /**
@@ -1010,7 +1026,7 @@ class PathDefense{
      * @param (towerType) タワーの種別
      */
     void showTowerData(int towerType){
-      TOWER *tower = getTower(towerType);
+      TOWER *tower = referTower(towerType);
 
       double value = tower->range * (tower->damage*tower->damage) / (double)tower->cost/4.0;
       fprintf(stderr,"towerId = %d, range = %d, damage = %d, cost = %d, value = %4.2f\n", 
@@ -1031,6 +1047,7 @@ class PathDefense{
       tower.id  = g_buildedTowerCount;
       tower.y   = y;
       tower.x   = x;
+      CELL *cell = getCell(y, x);
 
       // 建設したタワーリストに追加
       g_buildedTowerList.push_back(tower);
@@ -1040,6 +1057,9 @@ class PathDefense{
 
       // セルの「攻撃ダメージ」を更新
       updateCellDamageData(tower.id);
+
+      // セルの種別を(TOWER_POINT)に変更
+      cell->type = TOWER_POINT;
 
       // 建設情報の追加
       m_buildTowerData.push_back(tower.x);
@@ -1223,7 +1243,7 @@ class PathDefense{
      */
     bool canBuildTower(int towerType, int y, int x){
       CELL *cell = getCell(y, x);
-      TOWER *tower = getTower(towerType);
+      TOWER *tower = referTower(towerType);
 
       // マップ内であり、平地であり、所持金が足りている場合は建設可能
       return (isInsideMap(y, x) && cell->isPlain() && tower->cost <= g_currentAmountMoney);
@@ -1626,6 +1646,12 @@ class PathDefense{
       // ゲーム情報の更新
       updateBoardData(creeps, money, baseHealth);
 
+      // 敵が生きているかどうかをチェック
+      if(isAnyCreepReachableBase()){
+        BUILD_INFO buildData = searchBestBuildPoint();
+        buildTower(buildData.type, buildData.y, buildData.x);
+      }
+
       // ターンを1増やす
       g_currentTurn += 1;
 
@@ -1675,10 +1701,29 @@ class PathDefense{
      * @param (creepId) 敵ID
      * @param (baseId) 基地ID
      * 
-     * @sa isAnyBaseReachable
+     * @sa isAnyCreepReachableBase
      * @return 到達かどうかを示す判定値
      */
     bool canReachBasePoint(int creepId, int baseId){
+      CREEP *creep = getCreep(creepId);
+      int health = creep->health;
+      int y = creep->y;
+      int x = creep->x;
+      BASE *base = getBase(baseId);
+
+      // 基地に到達するまで繰り返す
+      while(y != base->y || x != base->x){
+        CELL *cell = getCell(y, x);
+        // セルで受けるダメージを計算
+        health -= cell->damage;
+
+        // 体力が0になったら到達出来ない
+        if(health <= 0) return false;
+        int direct = g_shortestPathMap[y][x][baseId];
+        y += DY[direct];
+        x += DX[direct];
+      }
+
       return true;
     }
 
