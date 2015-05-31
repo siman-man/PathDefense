@@ -344,6 +344,7 @@ typedef struct cell {
   int type;                   //! Cellのタイプ
   int y;                      //! Y座標
   int x;                      //! X座標
+  int basicDamage;            //! 基礎攻撃力
   int damage;                 //! この場所で与えられる最大ダメージ
   int coveredCount[MAX_R+1];  //! ここにタワーを立てることでカバーできる経路の数
   int baseId;                 //! 基地がある場合はそのID
@@ -356,6 +357,7 @@ typedef struct cell {
     this->y             = y;
     this->x             = x;
     this->type          = type;
+    this->basicDamage   = 0;
     this->damage        = 0;
     this->baseId        = UNDEFINED;
     this->spawnId       = UNDEFINED;
@@ -681,7 +683,7 @@ class PathDefense{
 
           // 攻撃範囲1-5までを処理
           for(int range = 1; range <= MAX_R; range++){
-            int coveredCount = calcCoverCellCount(y, x, range);
+            int coveredCount = calcCoverCellCount(y, x, range, 1);
             cell->coveredCount[range] = coveredCount;
           }
         }
@@ -787,7 +789,7 @@ class PathDefense{
           // 全てのタワーで処理を行う
           for(int towerType = 0; towerType < g_towerCount; towerType++){
             TOWER *tower = referTower(towerType);
-            int value = calcCoverCellCount(y, x, tower->range);
+            int value = calcCoverCellCount(y, x, tower->range, tower->damage);
 
             // 評価値が更新されたら建設情報を更新
             if(bestValue < value){
@@ -1063,7 +1065,7 @@ class PathDefense{
      * @detail 建設情報もここで追加を行う
      */
     void buildTower(int towerType, int y, int x){
-      fprintf(stderr,"buildTower type: %d\n", towerType);
+      //fprintf(stderr,"buildTower type: %d\n", towerType);
       TOWER tower = buyTower(towerType);
       tower.id  = g_buildedTowerCount;
       tower.y   = y;
@@ -1110,9 +1112,9 @@ class PathDefense{
         
         // 経路であれば攻撃力を更新
         if(cell->isPath()){
-          cell->damage += tower->damage;
+          cell->basicDamage += tower->damage;
           // 守りが堅くなったので守りの優先度は低くする
-          cell->basicValue -= cell->damage;
+          cell->basicValue = max(cell->basicValue - cell->basicDamage, 0);
         }
 
         for(int direct = 0; direct < 4; direct++){
@@ -1336,6 +1338,9 @@ class PathDefense{
 
           // 防御価値を0に初期化する
           cell->defenseValue = 0;
+
+          // セルの攻撃力を元に戻す
+          cell->damage = cell->basicDamage;
         }
       }
     }
@@ -1539,9 +1544,10 @@ class PathDefense{
         BASE *base = getBase(baseId);
         CELL *cell = getCell(base->y, base->x);
 
+        int edgeDist = calcDistanceToEdge(base->y, base->x);
         // マップの端までの距離が一定ラインを以下の場合は価値を下げる
-        if(calcDistanceToEdge(base->y, base->x) <= 5){
-          cell->basicValue -= 1;
+        if(edgeDist <= 5){
+          cell->basicValue -= 2 * (5 - edgeDist);
         }
       }
     }
@@ -1765,9 +1771,10 @@ class PathDefense{
       while(y != base->y || x != base->x){
         CELL *cell = getCell(y, x);
         // セルの攻撃力は非負値
-        assert(cell->damage >= 0);
+        assert(cell->basicDamage >= 0);
         // セルで受けるダメージを計算
         health -= cell->damage;
+        //cell->damage = 0;
 
         // 体力が0になったら到達出来ない
         if(health <= 0){
@@ -1793,7 +1800,7 @@ class PathDefense{
      *
      * @return カバーしている経路の数
      */
-    int calcCoverCellCount(int fromY, int fromX, int range){
+    int calcCoverCellCount(int fromY, int fromX, int range, int damage){
       int value = 0;
 
       queue<COORD> que;
@@ -1815,7 +1822,9 @@ class PathDefense{
 
           // もしセルの種別が経路であればカバーする範囲を増やす
           if(cell->isPath()){
-            value += 1 + cell->basicValue + cell->defenseValue;
+            value += damage/2 + cell->basicValue + cell->defenseValue;
+          }else{
+            //value -= 1;
           }
 
           // 上下左右のセルを追加
@@ -1836,15 +1845,12 @@ class PathDefense{
 };
 
 int main(){
-  int n, money, creepHealth, creepMoney, nt;
+  int n, nc, b, money, creepHealth, creepMoney, nt;
   string row;
   vector<string> board;
   cin >> n;
   cin >> money;
-  for(int y = 0; y < n; y++){
-    cin >> row;
-    board.push_back(row);
-  }
+  for(int y = 0; y < n; y++){cin >> row; board.push_back(row);}
   cin >> creepHealth;
   cin >> creepMoney;
   cin >> nt;
@@ -1852,20 +1858,15 @@ int main(){
   for(int i = 0; i < nt; i++){cin >> towerType[i];}
   PathDefense pd;
   pd.init(board, money, creepHealth, creepMoney, towerType);
-  int nc, b;
   for(int turn = 0; turn < LIMIT_TURN; turn++){
     //fprintf(stderr,"turn = %d\n", turn);
     cin >> money;
     cin >> nc;
     vector<int> creeps(nc);
-    for(int creepId = 0; creepId < nc; creepId++){
-      cin >> creeps[creepId];
-    }
+    for(int creepId = 0; creepId < nc; creepId++){cin >> creeps[creepId];}
     cin >> b;
     vector<int> baseHealth(b);
-    for(int baseId = 0; baseId < b; baseId++){
-      cin >> baseHealth[baseId];
-    }
+    for(int baseId = 0; baseId < b; baseId++){cin >> baseHealth[baseId];}
     vector<int> ret = pd.placeTowers(creeps, money, baseHealth);
     cout << ret.size() << endl;
     for(int i = 0; i < ret.size(); i++){cout << ret[i] << endl;}
