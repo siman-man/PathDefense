@@ -1858,11 +1858,9 @@ int main(){
   for(int turn = 0; turn < LIMIT_TURN; turn++){
     //fprintf(stderr,"turn = %d\n", turn);
     cin >> money;
-    cin >> nc;
-    vector<int> creeps(nc);
+    cin >> nc;vector<int> creeps(nc);
     for(int creepId = 0; creepId < nc; creepId++){cin >> creeps[creepId];}
-    cin >> b;
-    vector<int> baseHealth(b);
+    cin >> b;vector<int> baseHealth(b);
     for(int baseId = 0; baseId < b; baseId++){cin >> baseHealth[baseId];}
     vector<int> ret = pd.placeTowers(creeps, money, baseHealth);
     cout << ret.size() << endl;
