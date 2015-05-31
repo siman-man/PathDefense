@@ -1845,12 +1845,9 @@ class PathDefense{
 };
 
 int main(){
-  int n, nc, b, money, creepHealth, creepMoney, nt;
-  string row;
-  vector<string> board;
+  int n, nc, b, money, creepHealth, creepMoney, nt;string row;vector<string> board;
   cin >> n;
-  cin >> money;
-  for(int y = 0; y < n; y++){cin >> row; board.push_back(row);}
+  cin >> money;for(int y = 0; y < n; y++){cin >> row; board.push_back(row);}
   cin >> creepHealth;
   cin >> creepMoney;
   cin >> nt;
@@ -1869,7 +1866,4 @@ int main(){
     for(int baseId = 0; baseId < b; baseId++){cin >> baseHealth[baseId];}
     vector<int> ret = pd.placeTowers(creeps, money, baseHealth);
     cout << ret.size() << endl;
-    for(int i = 0; i < ret.size(); i++){cout << ret[i] << endl;}
-  }
-  return 0;
-}
+    for(int i = 0; i < ret.size(); i++){cout << ret[i] << endl;}}return 0;}
