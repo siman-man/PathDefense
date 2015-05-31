@@ -909,12 +909,12 @@ class PathDefense{
       // 逆算して最短路の登録を行う
       while(y != spawn->y || x != spawn->x){
         int prev = g_prevStep[y][x];
-        assert(prev != -1);
+        assert(prev != UNDEFINED);
         y += DY[(prev+2)%4];
         x += DX[(prev+2)%4];
 
         CELL *cell = getCell(y,x);
-        g_shortestPathMap[y][x][baseId] |= directMask[prev];
+        g_shortestPathMap[y][x][baseId] |= prev;
         cell->basePaths.insert(baseId);
       }
     }
@@ -1714,7 +1714,7 @@ class PathDefense{
      * @return 到達かどうかを示す判定値
      */
     bool canReachBasePoint(int creepId, int baseId){
-      fprintf(stderr,"canReachBasePoint =>\n");
+      fprintf(stderr,"canReachBasePoint: creepId %d -> baseId %d\n", creepId, baseId);
       CREEP *creep = getCreep(creepId);
       int health = creep->health;
       int y = creep->y;
@@ -1740,6 +1740,8 @@ class PathDefense{
           return false;
         }
         int direct = g_shortestPathMap[y][x][baseId];
+        fprintf(stderr,"y = %d, x = %d, direct = %d\n", y, x, direct);
+        assert(direct != UNDEFINED);
         y += DY[direct];
         x += DX[direct];
       }
