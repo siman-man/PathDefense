@@ -285,6 +285,7 @@ typedef struct tower {
   int damage;         // 攻撃力
   int cost;           // 建設コスト
   int lockedCreepId;  // ロックしている敵のID
+  double value;       // タワーの価値
 
   tower(int type = UNDEFINED, int range = UNDEFINED, int damage = UNDEFINED, int cost = UNDEFINED){
     this->type    = type;
@@ -330,6 +331,10 @@ typedef struct tower {
     int roughDist = calcRoughDist(y, x, destY, destX);
     return roughDist <= range * range;
   }
+
+  bool operator >(const tower &t) const{
+    return value < t.value;
+  } 
 } TOWER;
 
 /*
@@ -542,7 +547,7 @@ class PathDefense{
      * @detail
      * ゲームを始めるにあたって必要な情報を初期化しておく
      */
-    int init(vector<string> board, int money, int creepHealth, int creepMoney, vector<int> towerType){
+    int init(vector<string> board, int money, int creepHealth, int creepMoney, vector<int> towerTypes){
       fprintf(stderr,"init =>\n");
 
       // ターンを初期化を行う
@@ -558,7 +563,7 @@ class PathDefense{
       initBoardData(board);
 
       // タワーの初期化を行う
-      initTowerData(towerType);
+      initTowerData(towerTypes);
 
       // カバーできる経路の数を計算
       initCoveredCellCount();
@@ -676,7 +681,7 @@ class PathDefense{
 
           // 攻撃範囲1-5までを処理
           for(int range = 1; range <= MAX_R; range++){
-            int coveredCount = calcCoveredCellCount(y, x, range);
+            int coveredCount = calcCoverCellCount(y, x, range);
             cell->coveredCount[range] = coveredCount;
           }
         }
@@ -687,25 +692,39 @@ class PathDefense{
      * @fn [maybe]
      * タワー情報の初期化を行う
      * @param (towerType) タワーの情報が格納されているリスト
+     *
+     * @detail
+     * コストパフォーマンスの良いタワー上位5つを残す
      */
-    void initTowerData(vector<int> &towerType){
+    void initTowerData(vector<int> &towerTypes){
       // タワーの種類の数
-      g_towerCount = towerType.size() / 3;
+      g_towerCount = towerTypes.size() / 3;
 
-      fprintf(stderr,"towerCount = %d\n", g_towerCount);
+      //fprintf(stderr,"towerCount = %d\n", g_towerCount);
+      priority_queue<TOWER, vector<TOWER>, greater<TOWER> > pque;
 
-      for(int towerId = 0; towerId < g_towerCount; towerId++){
-        int range  = towerType[towerId*3];
-        int damage = towerType[towerId*3+1];
-        int cost   = towerType[towerId*3+2];
+      for(int towerType = 0; towerType < g_towerCount; towerType++){
+        int range  = towerTypes[towerType*3];
+        int damage = towerTypes[towerType*3+1];
+        int cost   = towerTypes[towerType*3+2];
 
         // タワーの作成
-        TOWER tower = createTower(towerId, range, damage, cost);
+        TOWER tower = createTower(towerType, range, damage, cost);
 
         // タワーの追加
-        g_towerList[towerId] = tower;
+        //g_towerList[towerId] = tower;
 
-        showTowerData(towerId);
+        pque.push(tower);
+
+        showTowerData(towerType);
+      }
+
+      g_towerCount = 5;
+
+      for(int id = 0; id < g_towerCount; id++){
+        TOWER tower = pque.top(); pque.pop();
+        tower.id = id;
+        g_towerList[id] = tower;
       }
     }
 
@@ -769,8 +788,8 @@ class PathDefense{
           // 全てのタワーで処理を行う
           for(int towerType = 0; towerType < g_towerCount; towerType++){
             TOWER *tower = referTower(towerType);
-            int coveredCount = calcCoveredCellCount(y, x, tower->range);
-            int value = coveredCount + cell->basicValue + cell->defenseValue;
+            int coveredCount = tower->damage * calcCoverCellCount(y, x, tower->range);
+            int value = coveredCount + cell->basicValue + tower->value;
 
             // 評価値が更新されたら建設情報を更新
             if(bestValue < value){
@@ -796,7 +815,7 @@ class PathDefense{
      * 現在のタワーの建設状態から何もしなくても敵を倒せるのかどうかを調べる
      */
     bool isAnyCreepReachableBase(){
-      fprintf(stderr,"isAnyCreepReachableBase =>\n");
+      //fprintf(stderr,"isAnyCreepReachableBase =>\n");
       set<int>::iterator it = g_aliveCreepsIdList.begin();
       // 全ての敵に対して処理する
       while(it != g_aliveCreepsIdList.end()){
@@ -914,7 +933,7 @@ class PathDefense{
         x += DX[(prev+2)%4];
 
         CELL *cell = getCell(y,x);
-        g_shortestPathMap[y][x][baseId] |= prev;
+        g_shortestPathMap[y][x][baseId] = prev;
         cell->basePaths.insert(baseId);
       }
     }
@@ -991,15 +1010,17 @@ class PathDefense{
     /**
      * @fn [maybe]
      * タワーの作成を行う(初期化時のみ使用)
-     * @param (towerId) タワーのID
-     * @param (range)   攻撃範囲
-     * @param (damage)  攻撃力
-     * @param (cost)    建設コスト
+     * @param (towerType) タワーの種類
+     * @param (range)     攻撃範囲
+     * @param (damage)    攻撃力
+     * @param (cost)      建設コスト
      *
      * @return タワーの情報
      */
-    TOWER createTower(int towerId, int range, int damage, int cost){
-      TOWER tower(towerId, range, damage, cost);
+    TOWER createTower(int towerType, int range, int damage, int cost){
+      TOWER tower(towerType, range, damage, cost);
+      double value = tower.range * (tower.damage*tower.damage) / (double)tower.cost/4.0;
+      tower.value = value;
 
       return tower;
     }
@@ -1078,7 +1099,7 @@ class PathDefense{
      * 基地を建てた時にマップ上のCellに「この場所でのダメージ」情報を更新する
      */
     void updateCellDamageData(int towerId){
-      fprintf(stderr,"updateCellDamageData =>\n");
+      //fprintf(stderr,"updateCellDamageData =>\n");
       queue<COORD> que;
       map<int, bool> checkList;
       TOWER *tower = getTower(towerId);
@@ -1382,7 +1403,7 @@ class PathDefense{
      * ボードのシミュレート予測を向上させる
      */
     void moveCreeps(){
-      fprintf(stderr,"moveCreeps =>\n");
+      //fprintf(stderr,"moveCreeps =>\n");
       set<int>::iterator it = g_aliveCreepsIdList.begin();
       // トライする回数
       int tryLimit = 10;
@@ -1420,6 +1441,7 @@ class PathDefense{
       // もしHPが0以下の場合は倒した
       if(creep->isDead()){
         creep->state = DEAD;
+        g_aliveCreepsIdList.erase(creep->id);
       }
     }
 
@@ -1428,7 +1450,7 @@ class PathDefense{
      * タワーが敵に対して攻撃
      */
     void attackTowers(){
-      fprintf(stderr,"attackTowers =>\n");
+      //fprintf(stderr,"attackTowers =>\n");
 
       for(int towerId = 0; towerId < g_buildedTowerCount; towerId++){
         TOWER *tower = getTower(towerId);
@@ -1448,7 +1470,7 @@ class PathDefense{
      * 主に次にロックする敵を決める
      */
     void updateTowerData(){
-      fprintf(stderr,"updateTowerData =>\n");
+      //fprintf(stderr,"updateTowerData =>\n");
 
       for(int towerId = 0; towerId < g_buildedTowerCount; towerId++){
         TOWER *tower = getTower(towerId);
@@ -1457,7 +1479,7 @@ class PathDefense{
 
         // 敵が見つかった場合はそれをロック
         if(creepId != NOT_FOUND){
-          fprintf(stderr,"tower locked %d\n", creepId);
+          //fprintf(stderr,"tower locked %d\n", creepId);
           tower->lockedCreepId = creepId;
         }
       }
@@ -1658,7 +1680,9 @@ class PathDefense{
       // 敵が生きているかどうかをチェック
       if(isAnyCreepReachableBase()){
         BUILD_INFO buildData = searchBestBuildPoint();
-        buildTower(buildData.type, buildData.y, buildData.x);
+        if(canBuildTower(buildData.type, buildData.y, buildData.x)){
+          buildTower(buildData.type, buildData.y, buildData.x);
+        }
       }
 
       // ターンを1増やす
@@ -1714,7 +1738,7 @@ class PathDefense{
      * @return 到達かどうかを示す判定値
      */
     bool canReachBasePoint(int creepId, int baseId){
-      fprintf(stderr,"canReachBasePoint: creepId %d -> baseId %d\n", creepId, baseId);
+      //fprintf(stderr,"canReachBasePoint: creepId %d -> baseId %d\n", creepId, baseId);
       CREEP *creep = getCreep(creepId);
       int health = creep->health;
       int y = creep->y;
@@ -1735,12 +1759,10 @@ class PathDefense{
         // 体力が0になったら到達出来ない
         if(health <= 0){
           // タワーは最低でも1つ建設されている
-          fprintf(stderr,"health = %d, g_buildedTowerCount = %d\n", health, g_buildedTowerCount);
           assert(g_buildedTowerCount > 0);
           return false;
         }
         int direct = g_shortestPathMap[y][x][baseId];
-        fprintf(stderr,"y = %d, x = %d, direct = %d\n", y, x, direct);
         assert(direct != UNDEFINED);
         y += DY[direct];
         x += DX[direct];
@@ -1758,7 +1780,7 @@ class PathDefense{
      *
      * @return カバーしている経路の数
      */
-    int calcCoveredCellCount(int fromY, int fromX, int range){
+    int calcCoverCellCount(int fromY, int fromX, int range){
       int coveredCellCount = 0;
 
       queue<COORD> que;
@@ -1778,8 +1800,8 @@ class PathDefense{
         if(calcRoughDist(fromY, fromX, coord.y, coord.x) <= range * range){
           CELL *cell = getCell(coord.y, coord.x);
 
-          // もしセルの種別が平地であればカバーする範囲を増やす
-          if(cell->type == PLAIN){
+          // もしセルの種別が経路であればカバーする範囲を増やす
+          if(cell->isPath()){
             coveredCellCount += 1;
           }
 
@@ -1830,7 +1852,7 @@ int main(){
   int nc, b;
 
   for(int turn = 0; turn < LIMIT_TURN; turn++){
-    fprintf(stderr,"turn = %d\n", turn);
+    //fprintf(stderr,"turn = %d\n", turn);
     cin >> money;
     cin >> nc;
 
