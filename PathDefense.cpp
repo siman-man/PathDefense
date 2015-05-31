@@ -178,6 +178,21 @@ typedef struct spawn {
 } SPAWN;
 
 /**
+ * @fn [complete]
+ * 2点間の大雑把な距離を計算
+ * @param (fromY) 出発地点のy座標
+ * @param (fromX) 出発地点のx座標
+ * @param (destY) 目標地点のy座標
+ * @param (destX) 目標地点のx座標
+ *
+ * @return sqrtで元に戻す前の距離
+ * @detail どちらの座標が近い/遠いを判断するだけならsqrtで元に戻さなくても比較出来る。
+ */
+int calcRoughDist(int fromY, int fromX, int destY, int destX){
+  return (fromY-destY) * (fromY-destY) + (fromX-destX) * (fromX-destX);
+}
+
+/**
  * @brief 敵を表す構造体
  */
 typedef struct creep {
@@ -205,7 +220,7 @@ typedef struct creep {
   }
 
   /**
-   * @fn [not yet]
+   * @fn [complete]
    * 倒されたかどうかの判定
    *
    * @return 倒されたかどうかの判定値
@@ -260,6 +275,7 @@ typedef struct base {
  */
 typedef struct tower {
   int id;             // ID
+  int type;           // タワーの種類
   int y;              // y座標
   int x;              // x座標
   int range;          // 射程距離
@@ -267,8 +283,9 @@ typedef struct tower {
   int cost;           // 建設コスト
   int lockedCreepId;  // ロックしている敵のID
 
-  tower(int id = UNDEFINED, int range = UNDEFINED, int damage = UNDEFINED, int cost = UNDEFINED){
+  tower(int type = UNDEFINED, int range = UNDEFINED, int damage = UNDEFINED, int cost = UNDEFINED){
     this->id      = id;
+    this->type    = type;
     this->range   = range;
     this->damage  = damage;
     this->cost    = cost;
@@ -298,6 +315,19 @@ typedef struct tower {
   bool isLocked(){
     return lockedCreepId != NOT_FOUND;
   }
+
+  /**
+   * @fn [not yet]
+   * 指定した座標が攻撃範囲に含まれているかどうかを判定
+   * @param (y) Y座標
+   * @param (x) X座標
+   *
+   * @return 範囲内かどうかを返す
+   */
+  bool isInsideAttackRange(int destY, int destX){
+    int roughDist = calcRoughDist(y, x, destY, destX);
+    return roughDist <= range * range;
+  }
 } TOWER;
 
 /*
@@ -308,7 +338,7 @@ typedef struct cell {
   int y;                      //! Y座標
   int x;                      //! X座標
   int damage;                 //! この場所で与えられる最大ダメージ
-  int coveredCount[MAX_R+1];  //! カバーできる経路の数
+  int coveredCount[MAX_R+1];  //! ここにタワーを立てることでカバーできる経路の数
   int baseId;                 //! 基地がある場合はそのID
   int spawnId;                //! スポーン地点の場合はID
   int basicValue;             //! 基礎点
@@ -319,7 +349,7 @@ typedef struct cell {
     this->y             = y;
     this->x             = x;
     this->type          = type;
-    this->damage        = UNDEFINED;
+    this->damage        = 0;
     this->baseId        = UNDEFINED;
     this->spawnId       = UNDEFINED;
     this->basicValue    = 0;
@@ -379,6 +409,7 @@ typedef struct cell {
   bool canMove(){
     return type != PLAIN;
   }
+
 } CELL;
 
 /**
@@ -403,20 +434,6 @@ unsigned long long xor128(){
   return (rw=(rw^(rw>>19))^(rt^(rt>>8)));
 }
 
-/**
- * @fn [complete]
- * 2点間の大雑把な距離を計算
- * @param (fromY) 出発地点のy座標
- * @param (fromX) 出発地点のx座標
- * @param (destY) 目標地点のy座標
- * @param (destX) 目標地点のx座標
- *
- * @return sqrtで元に戻す前の距離
- * @detail どちらの座標が近い/遠いを判断するだけならsqrtで元に戻さなくても比較出来る。
- */
-int calcRoughDist(int fromY, int fromX, int destY, int destX){
-  return (fromY-destY) * (fromY-destY) + (fromX-destX) * (fromX-destX);
-}
 
 //! 現在のターン
 int g_currentTurn;
@@ -534,7 +551,7 @@ class PathDefense{
       g_totalCreepCount = 0;
 
       // 最短路マップの初期化
-      memset(g_shortestPathMap, 0, sizeof(g_shortestPathMap));
+      memset(g_shortestPathMap, UNDEFINED, sizeof(g_shortestPathMap));
 
       // ボードの初期化を行う
       initBoardData(board);
@@ -727,7 +744,7 @@ class PathDefense{
     }
 
     /**
-     * @fn [not yet]
+     * @fn [maybe]
      * どこにタワーを立てるのが良いかを調べてその座標を返す
      *
      * @return 建設する場所とタワーID
@@ -770,19 +787,19 @@ class PathDefense{
 
     /**
      * @fn [not yet]
-     * ある地点から出現した敵がどこかの基地にたどり着けるかどうかを確認
-     * @param (fromY)  出発地点のY座標
-     * @param (fromX)  出発地点のX座標
-     * @param (health) 体力
+     * いずれかの敵が基地に到達出来るかどうかを確認
      *
      * @sa canReachBasePoint
      * @return どこかの基地に到達できるかどうかの判定値
      * @detail
      * 現在のタワーの建設状態から何もしなくても敵を倒せるのかどうかを調べる
      */
-    bool isAnyBaseReachable(int fromY, int fromX, int health){
-      // 全ての基地に対して実行を行う
-      for(int baseId = 0; baseId < g_baseCount; baseId++){
+    bool isAnyCreepReachableBase(){
+      set<int>::iterator it = g_aliveCreepsIdList.begin();
+      // 全ての敵に対して処理する
+      while(it != g_aliveCreepsIdList.end()){
+        int creepId = (*it);
+        it++;
       }
     }     
 
@@ -990,14 +1007,14 @@ class PathDefense{
     /**
      * @fn [maybe]
      * タワー情報の表示
-     * @param (towerId) タワーID
+     * @param (towerType) タワーの種別
      */
-    void showTowerData(int towerId){
-      TOWER *tower = getTower(towerId);
+    void showTowerData(int towerType){
+      TOWER *tower = getTower(towerType);
 
       double value = tower->range * (tower->damage*tower->damage) / (double)tower->cost/4.0;
       fprintf(stderr,"towerId = %d, range = %d, damage = %d, cost = %d, value = %4.2f\n", 
-          towerId, tower->range, tower->damage, tower->cost, value);
+          towerType, tower->range, tower->damage, tower->cost, value);
     }
 
     /**
@@ -1009,10 +1026,11 @@ class PathDefense{
      * 
      * @detail 建設情報もここで追加を行う
      */
-    void buildTower(int towerId, int y, int x){
-      TOWER tower = buyTower(towerId);
-      tower.y = y;
-      tower.x = x;
+    void buildTower(int towerType, int y, int x){
+      TOWER tower = buyTower(towerType);
+      tower.id  = g_buildedTowerCount;
+      tower.y   = y;
+      tower.x   = x;
 
       // 建設したタワーリストに追加
       g_buildedTowerList.push_back(tower);
@@ -1020,10 +1038,51 @@ class PathDefense{
       // 建設したタワーの数を更新
       g_buildedTowerCount += 1;
 
+      // セルの「攻撃ダメージ」を更新
+      updateCellDamageData(tower.id);
+
       // 建設情報の追加
       m_buildTowerData.push_back(tower.x);
       m_buildTowerData.push_back(tower.y);
-      m_buildTowerData.push_back(tower.id);
+      m_buildTowerData.push_back(tower.type);
+    }
+
+    /**
+     * @fn [maybe]
+     * 与えられるダメージの更新
+     * @param (towerId) タワーID
+     *
+     * @detail
+     * 基地を建てた時にマップ上のCellに「この場所でのダメージ」情報を更新する
+     */
+    void updateCellDamageData(int towerId){
+      queue<COORD> que;
+      map<int, bool> checkList;
+      TOWER *tower = getTower(towerId);
+      que.push(COORD(tower->y, tower->x, 0));
+
+      while(!que.empty()){
+        COORD coord = que.front(); que.pop();
+
+        CELL *cell = getCell(coord.y, coord.x);
+        
+        // 経路であれば攻撃力を更新
+        if(cell->isPath()){
+          cell->damage += tower->damage;
+        }
+
+        for(int direct = 0; direct < 4; direct++){
+          int ny = coord.y + DY[direct];
+          int nx = coord.x + DX[direct];
+          int z = calcZ(ny, nx);
+
+          // マップ内であり、未探索で、タワーの攻撃範囲内であれば追加
+          if(isInsideMap(ny, nx) && !checkList[z] && tower->isInsideAttackRange(ny, nx)){
+            checkList[z] = true;
+            que.push(COORD(ny, nx, coord.dist+1));
+          }
+        }
+      }
     }
 
     /**
@@ -1054,8 +1113,8 @@ class PathDefense{
      * @param (towerId) タワーID
      * @return タワー情報
      */
-    TOWER buyTower(int towerId){
-      TOWER tower = g_towerList[towerId];
+    TOWER buyTower(int towerType){
+      TOWER tower = g_towerList[towerType];
 
       // 建設コストより所持金が少ない状態でタワーは購入出来ない
       assert(tower.cost <= g_currentAmountMoney);
@@ -1073,7 +1132,18 @@ class PathDefense{
      * @return タワー情報のポインタ
      */
     TOWER* getTower(int towerId){
-      return &g_towerList[towerId];
+      return &g_buildedTowerList[towerId];
+    }
+
+    /**
+     * @fn [not yet]
+     * 指定した種別のタワー情報を取得
+     * @param (towerType) タワーの種別
+     *
+     * @return タワー情報
+     */
+    TOWER* referTower(int towerType){
+      return &g_towerList[towerType];
     }
 
     /**
@@ -1145,15 +1215,15 @@ class PathDefense{
     /**
      * @fn [complete]
      * タワーが建設可能かどうかを調べる
-     * @param (towerId) 建設したいタワーのID
-     * @param (y)       Y座標
-     * @param (x)       X座標
+     * @param (towerType) 建設したいタワーの種別
+     * @param (y)         Y座標
+     * @param (x)         X座標
      *
      * @return 建設可能かどうかの判定値
      */
-    bool canBuildTower(int towerId, int y, int x){
+    bool canBuildTower(int towerType, int y, int x){
       CELL *cell = getCell(y, x);
-      TOWER *tower = getTower(towerId);
+      TOWER *tower = getTower(towerType);
 
       // マップ内であり、平地であり、所持金が足りている場合は建設可能
       return (isInsideMap(y, x) && cell->isPlain() && tower->cost <= g_currentAmountMoney);
@@ -1401,7 +1471,7 @@ class PathDefense{
     }
 
     /**
-     * @fn [not yet]
+     * @fn [maybe]
      * セルの防御価値の基礎点を算出する(この値が高いほど守る価値がある)
      *
      * @detail
@@ -1442,11 +1512,14 @@ class PathDefense{
      *
      * @detail
      */
-    int updateCellDefeseValue(){
+    int updateCellDefenseValue(int y, int x){
+      CELL *cell = getCell(y, x);
+
+      return cell->basicValue;
     }
 
     /**
-     * @fn [not yet]
+     * @fn [maybe]
      * 敵の予測経路のポイントを高くする
      * @param (creepId) 敵のID
      * 
@@ -1462,12 +1535,13 @@ class PathDefense{
 
       while(it != cell->basePaths.end()){
         int baseId = (*it);
+        putFootPrint(cell->y, cell->x, baseId);
         it++;
       }
     }
 
     /**
-     * @fn [not yet]
+     * @fn [maybe]
      * 基地までの足跡をつける
      * @param (y)      Y座標
      * @param (x)      X座標
@@ -1478,36 +1552,21 @@ class PathDefense{
      * @detail
      * 基地までの足跡をつける(そのまま評価値に反映)
      */
-    void putFootPrint(int y, int x, int baseId, int limit){
+    void putFootPrint(int y, int x, int baseId, int limit = 5){
       BASE *base = getBase(baseId);
       map<int, bool> checkList;
-      queue<COORD> que;
-      que.push(COORD(y, x, 0));
       int dist = 0;
 
-      while(!que.empty()){
-        COORD coord = que.front(); que.pop();
+      while((base->y != y || base->x != x) || dist < limit){
+        int direct = g_shortestPathMap[y][x][baseId];
+        assert(direct != UNDEFINED);
+        int ny = y + DY[direct];
+        int nx = x + DX[direct];
 
-        // 制限距離を超えていた場合はスキップ
-        if(coord.dist > limit) continue;
-
-        int z = calcZ(coord.y, coord.x);
-        // 既に訪れていた場合はスキップ
-        if(checkList[z]) continue;
-        checkList[z] = true;
-
-        CELL *cell = getCell(coord.y, coord.x);
+        CELL *cell = getCell(ny, nx);
         cell->defenseValue += 1;
 
-        for(int direct = 0; direct < 4; direct++){
-          // もし行動可能であれば追加
-          if(g_shortestPathMap[cell->y][cell->x][baseId] & directMask[direct]){
-            int ny = cell->y + DY[direct];
-            int nx = cell->x + DX[direct];
-
-            que.push(COORD(ny, nx, coord.dist+1));
-          }
-        }
+        dist += 1;
       }
     }
 
@@ -1517,7 +1576,7 @@ class PathDefense{
      * @param (baseId) 基地ID
      *
      * @detail
-     * 基地周辺の防御価値を高くする
+     *   - 基地周辺の防御価値を高くする
      */
     void setBaseDefenseValue(int baseId){
       //! 基地周辺の距離
@@ -1616,6 +1675,7 @@ class PathDefense{
      * @param (creepId) 敵ID
      * @param (baseId) 基地ID
      * 
+     * @sa isAnyBaseReachable
      * @return 到達かどうかを示す判定値
      */
     bool canReachBasePoint(int creepId, int baseId){
