@@ -411,7 +411,6 @@ typedef struct cell {
   bool canMove(){
     return type != PLAIN;
   }
-
 } CELL;
 
 /**
@@ -655,6 +654,7 @@ class PathDefense{
             g_baseList[baseId] = base;
           }
 
+          assert(cell.damage == 0);
           // セルを代入
           g_board[y][x] = cell;
         }
@@ -796,6 +796,7 @@ class PathDefense{
      * 現在のタワーの建設状態から何もしなくても敵を倒せるのかどうかを調べる
      */
     bool isAnyCreepReachableBase(){
+      fprintf(stderr,"isAnyCreepReachableBase =>\n");
       set<int>::iterator it = g_aliveCreepsIdList.begin();
       // 全ての敵に対して処理する
       while(it != g_aliveCreepsIdList.end()){
@@ -1043,6 +1044,7 @@ class PathDefense{
      * @detail 建設情報もここで追加を行う
      */
     void buildTower(int towerType, int y, int x){
+      fprintf(stderr,"buildTower type: %d\n", towerType);
       TOWER tower = buyTower(towerType);
       tower.id  = g_buildedTowerCount;
       tower.y   = y;
@@ -1076,6 +1078,7 @@ class PathDefense{
      * 基地を建てた時にマップ上のCellに「この場所でのダメージ」情報を更新する
      */
     void updateCellDamageData(int towerId){
+      fprintf(stderr,"updateCellDamageData =>\n");
       queue<COORD> que;
       map<int, bool> checkList;
       TOWER *tower = getTower(towerId);
@@ -1186,6 +1189,7 @@ class PathDefense{
      * @return セル情報のポインタ
      */
     CELL* getCell(int y, int x){
+      assert(isInsideMap(y, x));
       return &g_board[y][x];
     }
 
@@ -1378,6 +1382,7 @@ class PathDefense{
      * ボードのシミュレート予測を向上させる
      */
     void moveCreeps(){
+      fprintf(stderr,"moveCreeps =>\n");
       set<int>::iterator it = g_aliveCreepsIdList.begin();
       // トライする回数
       int tryLimit = 10;
@@ -1423,6 +1428,8 @@ class PathDefense{
      * タワーが敵に対して攻撃
      */
     void attackTowers(){
+      fprintf(stderr,"attackTowers =>\n");
+
       for(int towerId = 0; towerId < g_buildedTowerCount; towerId++){
         TOWER *tower = getTower(towerId);
 
@@ -1441,6 +1448,8 @@ class PathDefense{
      * 主に次にロックする敵を決める
      */
     void updateTowerData(){
+      fprintf(stderr,"updateTowerData =>\n");
+
       for(int towerId = 0; towerId < g_buildedTowerCount; towerId++){
         TOWER *tower = getTower(towerId);
 
@@ -1705,20 +1714,31 @@ class PathDefense{
      * @return 到達かどうかを示す判定値
      */
     bool canReachBasePoint(int creepId, int baseId){
+      fprintf(stderr,"canReachBasePoint =>\n");
       CREEP *creep = getCreep(creepId);
       int health = creep->health;
       int y = creep->y;
       int x = creep->x;
       BASE *base = getBase(baseId);
 
+      // 敵の体力は0より大きい
+      assert(health > 0);
+
       // 基地に到達するまで繰り返す
       while(y != base->y || x != base->x){
         CELL *cell = getCell(y, x);
+        // セルの攻撃力は非負値
+        assert(cell->damage >= 0);
         // セルで受けるダメージを計算
         health -= cell->damage;
 
         // 体力が0になったら到達出来ない
-        if(health <= 0) return false;
+        if(health <= 0){
+          // タワーは最低でも1つ建設されている
+          fprintf(stderr,"health = %d, g_buildedTowerCount = %d\n", health, g_buildedTowerCount);
+          assert(g_buildedTowerCount > 0);
+          return false;
+        }
         int direct = g_shortestPathMap[y][x][baseId];
         y += DY[direct];
         x += DX[direct];
@@ -1808,7 +1828,7 @@ int main(){
   int nc, b;
 
   for(int turn = 0; turn < LIMIT_TURN; turn++){
-    //fprintf(stderr,"turn = %d\n", turn);
+    fprintf(stderr,"turn = %d\n", turn);
     cin >> money;
     cin >> nc;
 
