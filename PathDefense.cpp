@@ -566,7 +566,7 @@ class PathDefense{
       initTowerData(towerTypes);
 
       // カバーできる経路の数を計算
-      initCoveredCellCount();
+      // initCoverCellCount();
 
       // スポーン地点から基地までの最短路を計算
       initSpawnToBaseShortestPath();
@@ -670,7 +670,7 @@ class PathDefense{
      * @fn [maybe]
      * カバー出来る経路の数を初期化
      */
-    void initCoveredCellCount(){
+    void initCoverCellCount(){
       // マップ全体を更新
       for(int y = 0; y < g_boardHeight; y++){
         for(int x = 0; x < g_boardWidth; x++){
@@ -712,17 +712,16 @@ class PathDefense{
         TOWER tower = createTower(towerType, range, damage, cost);
 
         // タワーの追加
-        //g_towerList[towerId] = tower;
+        g_towerList[towerType] = tower;
 
         pque.push(tower);
-
-        showTowerData(towerType);
       }
 
       g_towerCount = 5;
 
       for(int id = 0; id < g_towerCount; id++){
         TOWER tower = pque.top(); pque.pop();
+        showTowerData(tower.type);
         tower.id = id;
         g_towerList[id] = tower;
       }
@@ -788,8 +787,7 @@ class PathDefense{
           // 全てのタワーで処理を行う
           for(int towerType = 0; towerType < g_towerCount; towerType++){
             TOWER *tower = referTower(towerType);
-            int coveredCount = tower->damage * calcCoverCellCount(y, x, tower->range);
-            int value = coveredCount + cell->basicValue + tower->value;
+            int value = calcCoverCellCount(y, x, tower->range);
 
             // 評価値が更新されたら建設情報を更新
             if(bestValue < value){
@@ -1113,6 +1111,8 @@ class PathDefense{
         // 経路であれば攻撃力を更新
         if(cell->isPath()){
           cell->damage += tower->damage;
+          // 守りが堅くなったので守りの優先度は低くする
+          cell->basicValue -= cell->damage;
         }
 
         for(int direct = 0; direct < 4; direct++){
@@ -1311,6 +1311,11 @@ class PathDefense{
 
       // 基地情報の更新
       updateBasesData(baseHealth);
+
+      // 敵の進軍経路の値を防御価値を高く
+      if(g_currentAmountMoney >= 30){
+        setCreepsMovePathValue();
+      }
     }
 
     /**
@@ -1572,21 +1577,26 @@ class PathDefense{
     /**
      * @fn [maybe]
      * 敵の予測経路のポイントを高くする
-     * @param (creepId) 敵のID
      * 
      * @detail
      * 敵が行動する経路を計算して、その部分の防御優先度を高くする
      * 進行方向の値だけを伸ばす
      */
-    void setCreepMovePathValue(int creepId){
-      CREEP *creep = getCreep(creepId);
-      CELL *cell = getCell(creep->y, creep->x);
+    void setCreepsMovePathValue(){
+      set<int>::iterator it = g_aliveCreepsIdList.begin();
 
-      set<int>::iterator it = cell->basePaths.begin();
+      while(it != g_aliveCreepsIdList.end()){
+        int creepId = (*it);
+        CREEP *creep = getCreep(creepId);
+        CELL *cell = getCell(creep->y, creep->x);
 
-      while(it != cell->basePaths.end()){
-        int baseId = (*it);
-        putFootPrint(cell->y, cell->x, baseId);
+        set<int>::iterator that = cell->basePaths.begin();
+
+        while(that != cell->basePaths.end()){
+          int baseId = (*that);
+          putFootPrint(creep->id, baseId);
+          that++;
+        }
         it++;
       }
     }
@@ -1599,23 +1609,26 @@ class PathDefense{
      * @param (baseId) 目的地の基地ID
      * @param (limit)  距離の限界
      *
-     * @sa setCreepMovePathValue
+     * @sa setCreepsMovePathValue
      * @detail
      * 基地までの足跡をつける(そのまま評価値に反映)
      */
-    void putFootPrint(int y, int x, int baseId, int limit = 5){
+    void putFootPrint(int creepId, int baseId, int limit = 15){
+      CREEP *creep = getCreep(creepId);
       BASE *base = getBase(baseId);
       map<int, bool> checkList;
+      int y = creep->y;
+      int x = creep->x;
       int dist = 0;
 
-      while((base->y != y || base->x != x) || dist < limit){
+      while((base->y != y || base->x != x) && (dist < limit)){
         int direct = g_shortestPathMap[y][x][baseId];
         assert(direct != UNDEFINED);
         int ny = y + DY[direct];
         int nx = x + DX[direct];
 
         CELL *cell = getCell(ny, nx);
-        cell->defenseValue += 1;
+        cell->defenseValue += creep->health;
 
         dist += 1;
       }
@@ -1678,7 +1691,7 @@ class PathDefense{
       updateBoardData(creeps, money, baseHealth);
 
       // 敵が生きているかどうかをチェック
-      if(isAnyCreepReachableBase()){
+      if(g_currentAmountMoney >= 30 && isAnyCreepReachableBase()){
         BUILD_INFO buildData = searchBestBuildPoint();
         if(canBuildTower(buildData.type, buildData.y, buildData.x)){
           buildTower(buildData.type, buildData.y, buildData.x);
@@ -1781,7 +1794,7 @@ class PathDefense{
      * @return カバーしている経路の数
      */
     int calcCoverCellCount(int fromY, int fromX, int range){
-      int coveredCellCount = 0;
+      int value = 0;
 
       queue<COORD> que;
       que.push(COORD(fromY, fromX, 0));
@@ -1802,7 +1815,7 @@ class PathDefense{
 
           // もしセルの種別が経路であればカバーする範囲を増やす
           if(cell->isPath()){
-            coveredCellCount += 1;
+            value += 1 + cell->basicValue + cell->defenseValue;
           }
 
           // 上下左右のセルを追加
@@ -1818,64 +1831,44 @@ class PathDefense{
         }
       }
 
-      return coveredCellCount;
+      return value;
     }
 };
 
 int main(){
-  int n, money, creepHealth, creepMoney;
-  int nt;
+  int n, money, creepHealth, creepMoney, nt;
   string row;
   vector<string> board;
-
   cin >> n;
   cin >> money;
-
   for(int y = 0; y < n; y++){
     cin >> row;
     board.push_back(row);
   }
-
   cin >> creepHealth;
   cin >> creepMoney;
-
   cin >> nt;
   vector<int> towerType(nt);
-
-  for(int i = 0; i < nt; i++){
-    cin >> towerType[i];
-  }
-
+  for(int i = 0; i < nt; i++){cin >> towerType[i];}
   PathDefense pd;
-
   pd.init(board, money, creepHealth, creepMoney, towerType);
   int nc, b;
-
   for(int turn = 0; turn < LIMIT_TURN; turn++){
     //fprintf(stderr,"turn = %d\n", turn);
     cin >> money;
     cin >> nc;
-
     vector<int> creeps(nc);
-
     for(int creepId = 0; creepId < nc; creepId++){
       cin >> creeps[creepId];
     }
-
     cin >> b;
     vector<int> baseHealth(b);
-
     for(int baseId = 0; baseId < b; baseId++){
       cin >> baseHealth[baseId];
     }
-
     vector<int> ret = pd.placeTowers(creeps, money, baseHealth);
-
     cout << ret.size() << endl;
-    for(int i = 0; i < ret.size(); i++){
-      cout << ret[i] << endl;
-    }
+    for(int i = 0; i < ret.size(); i++){cout << ret[i] << endl;}
   }
-
   return 0;
 }
