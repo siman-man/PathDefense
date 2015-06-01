@@ -259,7 +259,7 @@ typedef struct base {
    * @return 破壊されたかどうかの判定値
    */
   bool isBroken(){
-    return health == 0;
+    return health <= 0;
   }
 
   /**
@@ -346,10 +346,10 @@ typedef struct cell {
   int x;                        //! X座標
   int basicDamage;              //! 基礎攻撃力
   int damage;                   //! この場所で与えられる最大ダメージ
-  int coverPathCount[MAX_R+1];  //! ここにタワーを立てることでカバーできる経路の数
   int baseId;                   //! 基地がある場合はそのID
   int spawnId;                  //! スポーン地点の場合はID
   int basicValue;               //! 基礎点
+  int pathCount;                //! 最短路の経路となっている数
   int defenseValue;             //! セルの防御価値(値が高い程守る優先度が高い)
   set<int> basePaths;           //! どの基地の経路になっているかを調べる
 
@@ -361,6 +361,7 @@ typedef struct cell {
     this->damage        = 0;
     this->baseId        = UNDEFINED;
     this->spawnId       = UNDEFINED;
+    this->pathCount     = 0;
     this->basicValue    = 0;
     this->defenseValue  = 0;
   }
@@ -446,6 +447,9 @@ unsigned long long xor128(){
 //! 現在のターン
 int g_currentTurn;
 
+//! 全滅フラグ
+bool g_allBaseBroken;
+
 //! ボード
 CELL g_board[MAX_N][MAX_N];
 
@@ -463,6 +467,9 @@ int g_baseCount;
 
 //! タワーの総数
 int g_towerCount;
+
+//! タワー建設の最小費用
+int g_towerMinCost;
 
 //! ボードの横幅
 int g_boardWidth;
@@ -495,6 +502,9 @@ set<int> g_aliveCreepsIdList;
 
 //! タワーのリスト
 TOWER g_towerList[MAX_T];
+
+//! ここにタワーを立てることでカバーできる経路の数
+int coverPathCount[MAX_N][MAX_N][MAX_R+1];
 
 //! 建設済みのタワーリスト
 vector<TOWER> g_buildedTowerList;
@@ -558,6 +568,9 @@ class PathDefense{
       // 出現した敵の総数を初期化
       g_totalCreepCount = 0;
 
+      // 基地の数を初期化
+      g_baseCount = 0;
+
       // 最短路マップの初期化
       memset(g_shortestPathMap, UNDEFINED, sizeof(g_shortestPathMap));
 
@@ -570,9 +583,6 @@ class PathDefense{
       // カバーできる経路の数を計算
       initCoverCellCount();
 
-      // セルの防御価値を初期化
-      initCellBasicValue();
-
       // スポーン地点から基地までの最短路を計算
       initCellToBaseShortestPath();
 
@@ -582,14 +592,14 @@ class PathDefense{
       // 建設したタワーの数を初期化
       g_buildedTowerCount = 0;
 
-      // 基地の数を初期化
-      g_baseCount = 0;
-
       // 報酬の初期化
       g_reward = creepMoney;
 
       // 敵の初期体力の初期化
       g_creepHealth = creepHealth;
+
+      // セルの防御価値を初期化
+      initCellBasicValue();
 
       // ゲーム情報の表示
       showGameData();
@@ -682,12 +692,12 @@ class PathDefense{
           CELL *cell = getCell(y,x);
 
           // 基地が建設出来ない場所は飛ばす
-          if(cell->type != PLAIN) continue;
+          if(cell->isNotPlain()) continue;
 
           // 攻撃範囲1-5までを処理
           for(int range = 1; range <= MAX_R; range++){
             int pathCount = calcCoverPathCount(y, x, range);
-            cell->coverPathCount[range] = pathCount;
+            coverPathCount[y][x][range] = pathCount;
           }
         }
       }
@@ -722,13 +732,15 @@ class PathDefense{
         pque.push(tower);
       }
 
-      g_towerCount = 5;
+      g_towerCount = min(g_towerCount, 1);
+      g_towerMinCost = INT_MAX;
 
       for(int id = 0; id < g_towerCount; id++){
         TOWER tower = pque.top(); pque.pop();
         showTowerData(tower.type);
         tower.id = id;
         g_towerList[id] = tower;
+        g_towerMinCost = min(g_towerMinCost, tower.cost);
       }
     }
 
@@ -896,7 +908,7 @@ class PathDefense{
         if(cell->isBasePoint() && coord.dist <= calcManhattanDist(fromY, fromX, coord.y, coord.x)){
           int baseId = cell->baseId;
           // 最短経路の登録
-          registShortestPath(fromY, fromX, baseId);
+          registShortestPath(fromY, fromX, baseId, isEdgeOfMap(fromY, fromX));
         }else{
           for(int direct = 0; direct < 4; direct++){
             int ny = coord.y + DY[direct];
@@ -925,8 +937,8 @@ class PathDefense{
      * マップに「このセルからこの基地へはこの方角が最短ですよ」情報を書き込む
      * 各Cellに「この基地への最短路の経路になってます」情報を書き込む
      */
-    void registShortestPath(int destY, int destX, int baseId){
-       BASE  *base = getBase(baseId);
+    void registShortestPath(int destY, int destX, int baseId, bool isSpawnPoint = false){
+      BASE  *base = getBase(baseId);
       int y = base->y;
       int x = base->x;
 
@@ -942,6 +954,9 @@ class PathDefense{
         cell = getCell(y,x);
         g_shortestPathMap[y][x][baseId] = prev;
         cell->basePaths.insert(baseId);
+        if(isSpawnPoint){
+          cell->pathCount += 1;
+        }
       }
       cell = getCell(destY, destX);
       cell->basePaths.insert(baseId);
@@ -1031,7 +1046,7 @@ class PathDefense{
     TOWER createTower(int towerType, int range, int damage, int cost){
       TOWER tower(towerType, range, damage, cost);
       double count = ceil(g_creepHealth/(double)damage);
-      double value = tower.range * (tower.damage*tower.damage) / (double)tower.cost/2.0 - 5 * count;
+      double value = (tower.range * (tower.damage)) / (double)tower.cost - count;
       tower.value = value;
 
       return tower;
@@ -1125,7 +1140,8 @@ class PathDefense{
         if(cell->isPath()){
           cell->basicDamage += tower->damage;
           // 守りが堅くなったので守りの優先度は低くする
-          cell->basicValue = max(cell->basicValue - tower->damage, 0);
+          cell->basicValue = max(cell->basicValue - cell->damage, 0);
+          //cell->basicValue = max(cell->basicValue - tower->damage, 0);
         }
 
         for(int direct = 0; direct < 4; direct++){
@@ -1328,7 +1344,7 @@ class PathDefense{
       updateBasesData(baseHealth);
 
       // 敵の進軍経路の値を防御価値を高く
-      if(g_currentAmountMoney >= 30){
+      if(g_currentAmountMoney >= g_towerMinCost){
         setCreepsMovePathValue();
       }
     }
@@ -1519,6 +1535,9 @@ class PathDefense{
      * 基地情報の更新、体力が0になった基地は状態を「BROKEN」に変更
      */
     void updateBasesData(vector<int> &baseHealth){
+      g_allBaseBroken = true;
+
+      assert(g_baseCount == baseHealth.size());
 
       // 各基地の体力を更新
       for(int baseId = 0; baseId < g_baseCount; baseId++){
@@ -1542,7 +1561,10 @@ class PathDefense{
     void updateBaseState(BASE *base){
       // もし体力が0になっていた場合、状態を「破壊された(BROKEN)」に変更
       if(base->isBroken()){
+        assert(base->health <= 0);
         base->state = BROKEN;
+      }else{
+        g_allBaseBroken = false;
       }
     }
 
@@ -1564,6 +1586,8 @@ class PathDefense{
         if(edgeDist <= 5){
           cell->basicValue -= 2 * (5 - edgeDist);
         }
+
+        setBaseDefenseValue(baseId);
       }
     }
 
@@ -1635,7 +1659,7 @@ class PathDefense{
      * @detail
      * 基地までの足跡をつける(そのまま評価値に反映)
      */
-    void putFootPrint(int creepId, int baseId, int limit = 30){
+    void putFootPrint(int creepId, int baseId, int limit = 100){
       CREEP *creep = getCreep(creepId);
       BASE *base = getBase(baseId);
       map<int, bool> checkList;
@@ -1651,7 +1675,7 @@ class PathDefense{
         int nx = x + DX[direct];
 
         CELL *cell = getCell(ny, nx);
-        cell->defenseValue += 10 * health;
+        cell->defenseValue += 100 * health;
 
         dist += 1;
       }
@@ -1667,7 +1691,7 @@ class PathDefense{
      */
     void setBaseDefenseValue(int baseId){
       //! 基地周辺の距離
-      int LIMIT = 5;
+      int LIMIT = 3;
       BASE *base = getBase(baseId);
       map<int, bool> checkList;
       queue<COORD> que;
@@ -1686,8 +1710,8 @@ class PathDefense{
 
         CELL *cell = getCell(coord.y, coord.x);
         if(cell->isPath()){
-          // 基地から離れる程よい
-          cell->defenseValue += coord.dist;
+          cell->basicValue += g_creepHealth * 100;
+          //cell->defenseValue += coord.dist;
         }
 
         for(int direct = 0; direct < 4; direct++){
@@ -1717,7 +1741,7 @@ class PathDefense{
       updateBoardData(creeps, money, baseHealth);
 
       // 敵が生きているかどうかをチェック
-      if(g_currentAmountMoney >= 30 && isAnyCreepReachableBase()){
+      if(!g_allBaseBroken && g_currentAmountMoney >= g_towerMinCost && isAnyCreepReachableBase()){
         BUILD_INFO buildData = searchBestBuildPoint();
         if(canBuildTower(buildData.type, buildData.y, buildData.x)){
           buildTower(buildData.type, buildData.y, buildData.x);
@@ -1892,9 +1916,12 @@ class PathDefense{
         if(calcRoughDist(fromY, fromX, coord.y, coord.x) <= range * range){
           CELL *cell = getCell(coord.y, coord.x);
 
-          // もしセルの種別が経路であればカバーする範囲を増やす
           if(cell->isPath()){
-            value += damage/2 + cell->basicValue + cell->defenseValue;
+            //value += cell->basicValue - cell->damage;
+            //value += damage + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
+            value += damage/2 + cell->basicValue + cell->defenseValue + cell->pathCount - cell->damage/g_creepHealth;
+          }else if(cell->isPlain()){
+            value -= 0.5;
           }
 
           // 上下左右のセルを追加
@@ -1905,6 +1932,9 @@ class PathDefense{
             // もし画面外で無い場合はキューに追加
             if(isInsideMap(ny, nx)){
               que.push(COORD(ny, nx));
+            // 画面外をなるべく含めないように
+            }else{
+              value -= 1;
             }
           }
         }
