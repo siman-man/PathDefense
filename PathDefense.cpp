@@ -1919,7 +1919,8 @@ class PathDefense{
           if(cell->isPath()){
             //value += cell->basicValue - cell->damage;
             //value += damage + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
-            value += damage/2 + cell->basicValue + cell->defenseValue + cell->pathCount - cell->damage/g_creepHealth;
+            value += damage/2 + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
+            //value += damage/2 + cell->basicValue + cell->defenseValue + cell->pathCount - cell->damage/g_creepHealth;
           }else if(cell->isPlain()){
             value -= 0.5;
           }
