@@ -823,6 +823,11 @@ class PathDefense{
         CREEP *creep = getCreep(creepId);
         CELL *cell = getCell(creep->y, creep->x);
 
+        if(cell->basePaths.size() == 0){
+          fprintf(stderr,"y = %d, x = %d\n", cell->y, cell->x);
+        }
+        assert(cell->basePaths.size() > 0);
+
         set<int>::iterator that = cell->basePaths.begin();
 
         while(that != cell->basePaths.end()){
@@ -867,7 +872,7 @@ class PathDefense{
      * 最短距離は幅優先探索で出す
      */
     void calcSpawnToBaseShortestPath(int spawnId){
-      map<int, bool> checkList;
+      map<int, int> checkList;
       SPAWN *spawn = getSpawn(spawnId);
       queue<COORD> que;
       que.push(COORD(spawn->y, spawn->x, 0));
@@ -881,6 +886,8 @@ class PathDefense{
 
         // セル情報を取得
         CELL *cell = getCell(coord.y, coord.x);
+
+        assert(cell->isNotPlain());
 
         // 基地に辿り着いてそれがマンハッタン距離と同等の場合は経路を復元して登録を行う
         if(cell->isBasePoint() && coord.dist <= calcManhattanDist(spawn->y, spawn->x, coord.y, coord.x)){
@@ -897,8 +904,8 @@ class PathDefense{
 
             // 行動出来るセルであれば進む
             // が、もしチェックしたセルであれば処理を飛ばす
-            if(canMoveCell(ny, nx) && !checkList[nz]){
-              checkList[nz] = true;
+            if(canMoveCell(ny, nx) && (checkList[nz] == 0 || coord.dist <= checkList[nz])){
+              checkList[nz] = (coord.dist == 0)? -1 : coord.dist;
               que.push(COORD(ny, nx, coord.dist+1));
               g_prevStep[ny][nx] = direct;
             }
@@ -924,18 +931,23 @@ class PathDefense{
       int x = base->x;
 
       fprintf(stderr,"regist shortest path: %d -> %d\n", spawnId, baseId);
+      CELL *cell;
 
       // 逆算して最短路の登録を行う
       while(y != spawn->y || x != spawn->x){
         int prev = g_prevStep[y][x];
         assert(prev != UNDEFINED);
+        //fprintf(stderr,"y = %d, x = %d\n", y, x);
         y += DY[(prev+2)%4];
         x += DX[(prev+2)%4];
 
-        CELL *cell = getCell(y,x);
+        cell = getCell(y,x);
         g_shortestPathMap[y][x][baseId] = prev;
         cell->basePaths.insert(baseId);
       }
+      //fprintf(stderr,"y = %d, x = %d\n", spawn->y, spawn->x);
+      cell = getCell(spawn->y, spawn->x);
+      cell->basePaths.insert(baseId);
     }
 
     /**
@@ -1019,7 +1031,8 @@ class PathDefense{
      */
     TOWER createTower(int towerType, int range, int damage, int cost){
       TOWER tower(towerType, range, damage, cost);
-      double value = tower.range * (tower.damage*tower.damage) / (double)tower.cost/4.0;
+      double count = ceil(g_creepHealth/(double)damage);
+      double value = tower.range * (tower.damage*tower.damage) / (double)tower.cost/2.0 - 5 * count;
       tower.value = value;
 
       return tower;
@@ -1114,7 +1127,7 @@ class PathDefense{
         if(cell->isPath()){
           cell->basicDamage += tower->damage;
           // 守りが堅くなったので守りの優先度は低くする
-          cell->basicValue = max(cell->basicValue - g_creepHealth/tower->damage, 0);
+          cell->basicValue = max(cell->basicValue - tower->damage, 0);
         }
 
         for(int direct = 0; direct < 4; direct++){
@@ -1596,6 +1609,10 @@ class PathDefense{
         CREEP *creep = getCreep(creepId);
         CELL *cell = getCell(creep->y, creep->x);
 
+        if(cell->basePaths.size() == 0){
+          fprintf(stderr,"y = %d, x = %d\n", cell->y, cell->x);
+        }
+        assert(cell->basePaths.size() > 0);
         set<int>::iterator that = cell->basePaths.begin();
 
         while(that != cell->basePaths.end()){
@@ -1778,7 +1795,7 @@ class PathDefense{
         assert(cell->basicDamage >= 0);
         // セルで受けるダメージを計算
         health -= cell->damage;
-        //cell->damage = 0;
+        cell->damage = 0;
 
         // 体力が0になったら到達出来ない
         if(health <= 0){
@@ -1878,7 +1895,7 @@ class PathDefense{
 
           // もしセルの種別が経路であればカバーする範囲を増やす
           if(cell->isPath()){
-            value += g_creepHealth/damage + cell->basicValue + cell->defenseValue;
+            value += damage + cell->basicValue + cell->defenseValue;
           }
 
           // 上下左右のセルを追加
