@@ -407,7 +407,7 @@ typedef struct cell {
    * @return 経路かどうかの判定値
    */
   bool isPath(){
-    return type == PATH;
+    return type == PATH || type == SPAWN_POINT;
   }
 
   /**
@@ -571,7 +571,7 @@ class PathDefense{
       // initCoverCellCount();
 
       // スポーン地点から基地までの最短路を計算
-      initSpawnToBaseShortestPath();
+      initCellToBaseShortestPath();
 
       // 初期の所持金
       g_currentAmountMoney = money;
@@ -852,30 +852,33 @@ class PathDefense{
      * 最短経路を計算しておき、敵が出現した際に狙われる基地をリストアップ出来るように
      * しておく。ここでの最短経路は「マンハッタン距離」より長くならない経路を指す
      */
-    void initSpawnToBaseShortestPath(){
-      int spawnCount = g_spawnList.size();
+    void initCellToBaseShortestPath(){
+      // 全てのセルを始点
+      for(int y = 0; y < g_boardHeight; y++){
+        for(int x = 0; x < g_boardWidth; x++){
+          CELL *cell = getCell(y, x);
 
-      // スポーン地点毎に処理を行う
-      for(int spawnId = 0; spawnId < spawnCount; spawnId++){
-        calcSpawnToBaseShortestPath(spawnId);
+          if(cell->isPath()){
+            calcToBaseShortestPath(y, x);
+          }
+        }
       }
     }
 
     /**
      * @fn [maybe]
      * 出現ポイントから基地までの最短経路を出す
-     * @param (spawnY) スポーン地点のY座標
-     * @param (spawnX) スポーン地点のX座標
-     * @sa initSpawnToBaseShortestPath
+     * @param (fromY) 開始地点のY座標
+     * @param (fromX) 開始地点のX座標
+     * @sa initCellToBaseShortestPath
      *
      * @detail 
      * 最短距離は幅優先探索で出す
      */
-    void calcSpawnToBaseShortestPath(int spawnId){
-      map<int, int> checkList;
-      SPAWN *spawn = getSpawn(spawnId);
+    void calcToBaseShortestPath(int fromY, int fromX){
+      map<int, bool> checkList;
       queue<COORD> que;
-      que.push(COORD(spawn->y, spawn->x, 0));
+      que.push(COORD(fromY, fromX, 0));
 
       // 前回行動した情報のリセット
       memset(g_prevStep, UNDEFINED, sizeof(g_prevStep));
@@ -890,12 +893,10 @@ class PathDefense{
         assert(cell->isNotPlain());
 
         // 基地に辿り着いてそれがマンハッタン距離と同等の場合は経路を復元して登録を行う
-        if(cell->isBasePoint() && coord.dist <= calcManhattanDist(spawn->y, spawn->x, coord.y, coord.x)){
+        if(cell->isBasePoint() && coord.dist <= calcManhattanDist(fromY, fromX, coord.y, coord.x)){
           int baseId = cell->baseId;
           // 最短経路の登録
-          registShortestPath(spawnId, baseId);
-          // スポーン地点の候補基地リストに追加
-          spawn->targetBases.insert(baseId);
+          registShortestPath(fromY, fromX, baseId);
         }else{
           for(int direct = 0; direct < 4; direct++){
             int ny = coord.y + DY[direct];
@@ -904,8 +905,8 @@ class PathDefense{
 
             // 行動出来るセルであれば進む
             // が、もしチェックしたセルであれば処理を飛ばす
-            if(canMoveCell(ny, nx) && (checkList[nz] == 0 || coord.dist <= checkList[nz])){
-              checkList[nz] = (coord.dist == 0)? -1 : coord.dist;
+            if(canMoveCell(ny, nx) && !checkList[nz]){
+              checkList[nz] = true;
               que.push(COORD(ny, nx, coord.dist+1));
               g_prevStep[ny][nx] = direct;
             }
@@ -924,20 +925,17 @@ class PathDefense{
      * マップに「このセルからこの基地へはこの方角が最短ですよ」情報を書き込む
      * 各Cellに「この基地への最短路の経路になってます」情報を書き込む
      */
-    void registShortestPath(int spawnId, int baseId){
+    void registShortestPath(int destY, int destX, int baseId){
        BASE  *base = getBase(baseId);
-      SPAWN *spawn = getSpawn(spawnId);
       int y = base->y;
       int x = base->x;
 
-      fprintf(stderr,"regist shortest path: %d -> %d\n", spawnId, baseId);
       CELL *cell;
 
       // 逆算して最短路の登録を行う
-      while(y != spawn->y || x != spawn->x){
+      while(y != destY || x != destX){
         int prev = g_prevStep[y][x];
         assert(prev != UNDEFINED);
-        //fprintf(stderr,"y = %d, x = %d\n", y, x);
         y += DY[(prev+2)%4];
         x += DX[(prev+2)%4];
 
@@ -945,8 +943,7 @@ class PathDefense{
         g_shortestPathMap[y][x][baseId] = prev;
         cell->basePaths.insert(baseId);
       }
-      //fprintf(stderr,"y = %d, x = %d\n", spawn->y, spawn->x);
-      cell = getCell(spawn->y, spawn->x);
+      cell = getCell(destY, destX);
       cell->basePaths.insert(baseId);
     }
 
@@ -1063,9 +1060,8 @@ class PathDefense{
     void showTowerData(int towerType){
       TOWER *tower = referTower(towerType);
 
-      double value = tower->range * (tower->damage*tower->damage) / (double)tower->cost/4.0;
       fprintf(stderr,"towerId = %d, range = %d, damage = %d, cost = %d, value = %4.2f\n", 
-          towerType, tower->range, tower->damage, tower->cost, value);
+          towerType, tower->range, tower->damage, tower->cost, tower->value);
     }
 
     /**
