@@ -683,8 +683,8 @@ class PathDefense{
 
           // 攻撃範囲1-5までを処理
           for(int range = 1; range <= MAX_R; range++){
-            int coveredCount = calcCoverCellCount(y, x, range, 1);
-            cell->coveredCount[range] = coveredCount;
+            int pathCount = calcCoverPathCount(y, x, range, 1);
+            cell->coveredCount[range] = pathCount;
           }
         }
       }
@@ -773,9 +773,9 @@ class PathDefense{
      */
     BUILD_INFO searchBestBuildPoint(){
       int bestValue = INT_MIN;
-      int bestY;
-      int bestX;
-      int bestType;
+      int bestY = UNDEFINED;
+      int bestX = UNDEFINED;
+      int bestType = UNDEFINED;
 
       // マップ全体に対して処理を行う
       for(int y = 0; y < g_boardHeight; y++){
@@ -789,7 +789,7 @@ class PathDefense{
           // 全てのタワーで処理を行う
           for(int towerType = 0; towerType < g_towerCount; towerType++){
             TOWER *tower = referTower(towerType);
-            int value = calcCoverCellCount(y, x, tower->range, tower->damage);
+            int value = calcBuildValue(y, x, tower->range, tower->damage);
 
             // 評価値が更新されたら建設情報を更新
             if(bestValue < value){
@@ -1800,7 +1800,57 @@ class PathDefense{
      *
      * @return カバーしている経路の数
      */
-    int calcCoverCellCount(int fromY, int fromX, int range, int damage){
+    int calcCoverPathCount(int fromY, int fromX, int range, int damage){
+      int pathCount = 0;
+
+      queue<COORD> que;
+      que.push(COORD(fromY, fromX, 0));
+      map<int, bool> checkList;
+
+      // 座標情報が無くなるまで繰り返す
+      while(!que.empty()){
+        COORD coord = que.front(); que.pop();
+        int z = calcZ(coord.y, coord.x);
+
+        // 調査済みの座標であれば処理を飛ばす
+        if(checkList[z]) continue;
+        checkList[z] = true;
+
+        // もし距離が攻撃範囲であれば処理を続ける
+        if(calcRoughDist(fromY, fromX, coord.y, coord.x) <= range * range){
+          CELL *cell = getCell(coord.y, coord.x);
+
+          // もしセルの種別が経路であればカバーする範囲を増やす
+          if(cell->isPath()){
+            pathCount += 1;
+          }
+
+          // 上下左右のセルを追加
+          for(int i = 0; i < 4; i++){
+            int ny = coord.y + DY[i];
+            int nx = coord.x + DX[i];
+
+            // もし画面外で無い場合はキューに追加
+            if(isInsideMap(ny, nx)){
+              que.push(COORD(ny, nx));
+            }
+          }
+        }
+      }
+
+      return pathCount;
+    }
+
+    /**
+     * @fn
+     * この地点にタワーを建てた時の評価値を計算する
+     * @param (fromY) 出発地点のY座標
+     * @param (fromX) 出発地点のX座標
+     * @param (range) 攻撃範囲
+     *
+     * @return カバーしている経路の数
+     */
+    int calcBuildValue(int fromY, int fromX, int range, int damage){
       int value = 0;
 
       queue<COORD> que;
