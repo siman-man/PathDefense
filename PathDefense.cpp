@@ -148,6 +148,22 @@ typedef struct coord {
 } COORD;
 
 /**
+ * @brief 経路情報を表す構造体
+ */
+typedef struct route {
+  int y;
+  int x;
+  int dist;
+  vector<COORD> routes;
+
+  route(int y = UNDEFINED, int x = UNDEFINED, int dist = UNDEFINED){
+    this->y = y;
+    this->x = x;
+    this->dist = dist;
+  }
+} ROUTE;
+
+/**
  * @brief 建設情報を表す構造体
  */
 typedef struct buildInfo {
@@ -349,21 +365,24 @@ typedef struct cell {
   int baseId;                   //! 基地がある場合はそのID
   int spawnId;                  //! スポーン地点の場合はID
   int basicValue;               //! 基礎点
+  int aroundPathCount;          //! 周辺の経路の数
   int pathCount;                //! 最短路の経路となっている数
   int defenseValue;             //! セルの防御価値(値が高い程守る優先度が高い)
   set<int> basePaths;           //! どの基地の経路になっているかを調べる
+  set<int> spawnPaths;          //! 出現ポイントからの経路になっている
 
   cell(int y = UNDEFINED, int x = UNDEFINED, int type = UNDEFINED){
-    this->y             = y;
-    this->x             = x;
-    this->type          = type;
-    this->basicDamage   = 0;
-    this->damage        = 0;
-    this->baseId        = UNDEFINED;
-    this->spawnId       = UNDEFINED;
-    this->pathCount     = 0;
-    this->basicValue    = 0;
-    this->defenseValue  = 0;
+    this->y               = y;
+    this->x               = x;
+    this->type            = type;
+    this->basicDamage     = 0;
+    this->damage          = 0;
+    this->baseId          = UNDEFINED;
+    this->spawnId         = UNDEFINED;
+    this->aroundPathCount = 0;
+    this->pathCount       = 0;
+    this->basicValue      = 0;
+    this->defenseValue    = 0;
   }
 
   /**
@@ -400,6 +419,15 @@ typedef struct cell {
    */
   bool isNotBasePoint(){
     return !isBasePoint();
+  }
+
+  /**
+   * @fn [not yet]
+   * スポーン地点かどうかを返す
+   * @return スポーン地点かどうかの判定値
+   */
+  bool isSpawnPoint(){
+    return type == SPAWN_POINT;
   }
 
   /**
@@ -873,6 +901,9 @@ class PathDefense{
           if(cell->isPath()){
             calcToBaseShortestPath(y, x);
           }
+          if(cell->isSpawnPoint()){
+            calcSpawnToBaseShortestPath(cell->spawnId, y, x);
+          }
         }
       }
     }
@@ -929,6 +960,62 @@ class PathDefense{
 
     /**
      * @fn [maybe]
+     * 出現ポイントから基地までの最短経路を出す
+     * @param (fromY) 開始地点のY座標
+     * @param (fromX) 開始地点のX座標
+     * @sa initCellToBaseShortestPath
+     *
+     * @detail 
+     * 最短距離は幅優先探索で出す
+     */
+    void calcSpawnToBaseShortestPath(int spawnId, int fromY, int fromX){
+      assert(spawnId != UNDEFINED);
+      int checkList[MAX_N][MAX_N];
+      memset(checkList, UNDEFINED, sizeof(checkList));
+      queue<ROUTE> que;
+      ROUTE start(fromY, fromX, 0);
+      que.push(start);
+
+      while(!que.empty()){
+        // 座標情報の取得
+        ROUTE route = que.front(); que.pop();
+
+        // セル情報を取得
+        CELL *cell = getCell(route.y, route.x);
+
+        assert(cell->isNotPlain());
+
+        // 基地に辿り着いてそれがマンハッタン距離と同等の場合は経路を復元して登録を行う
+        if(cell->isBasePoint() && route.dist <= calcManhattanDist(fromY, fromX, route.y, route.x)){
+          // 最短経路の登録
+          registPath(spawnId, route.routes);
+        }else{
+          for(int direct = 0; direct < 4; direct++){
+            int ny = route.y + DY[direct];
+            int nx = route.x + DX[direct];
+            int nz = calcZ(ny, nx);
+
+            // 行動出来るセルであれば進む
+            // が、もしチェックしたセルであれば処理を飛ばす
+            if(canMoveCell(ny, nx) && (checkList[ny][nx] == UNDEFINED || route.dist <= checkList[ny][nx])){
+              if(checkList[ny][nx] == UNDEFINED){
+                checkList[ny][nx] = route.dist+1;
+              }else{
+                checkList[ny][nx] = min(checkList[ny][nx], route.dist+1);
+              }
+              ROUTE next(ny, nx, route.dist+1);
+              next.routes = route.routes;
+              next.routes.push_back(COORD(ny, nx));
+              que.push(next);
+            }
+          }
+        }
+      }
+    }
+
+
+    /**
+     * @fn [maybe]
      * 最短経路の登録を行う
      * @param (spawnId) スポーン地点のID
      * @param (baseId)  基地のID
@@ -960,6 +1047,26 @@ class PathDefense{
       }
       cell = getCell(destY, destX);
       cell->basePaths.insert(baseId);
+    }
+
+    /**
+     * @fn [maybe]
+     * 最短経路の登録を行う
+     * @param (spawnId) スポーン地点のID
+     * @param (baseId)  基地のID
+     *
+     * @detail
+     * マップに「このセルからこの基地へはこの方角が最短ですよ」情報を書き込む
+     * 各Cellに「この基地への最短路の経路になってます」情報を書き込む
+     */
+    void registPath(int spawnId, vector<COORD> routes){
+      int size = routes.size();
+
+      for(int i = 0; i < size; i++){
+        COORD coord = routes[i];
+        CELL *cell = getCell(coord.y, coord.x);
+        cell->spawnPaths.insert(spawnId);
+      }
     }
 
     /**
@@ -1582,6 +1689,33 @@ class PathDefense{
 
         setBaseDefenseValue(baseId);
       }
+
+      for(int y = 0; y < g_boardHeight; y++){
+        for(int x = 0; x < g_boardWidth; x++){
+          CELL *cell = getCell(y, x);
+
+          cell->aroundPathCount = calcCrossPath(y, x);
+        }
+      }
+    }
+    
+    /**
+     * @fn
+     * 十字路や三叉路の値を評価
+     */
+    int calcCrossPath(int y, int x){
+      int pathCount = 0;
+
+      for(int direct = 0; direct < 4; direct++){
+        int ny = y + DY[direct];
+        int nx = x + DX[direct];
+
+        if(canMoveCell(ny, nx)){
+          pathCount += 1;
+        }
+      }
+
+      return pathCount;
     }
 
     /**
@@ -1658,7 +1792,7 @@ class PathDefense{
       map<int, bool> checkList;
       int y = creep->y;
       int x = creep->x;
-      int health = 2 * creep->health;
+      int health = creep->health;
       int dist = 0;
 
       while((base->y != y || base->x != x) && (dist < limit) && (health > 0)){
@@ -1668,7 +1802,7 @@ class PathDefense{
         int nx = x + DX[direct];
 
         CELL *cell = getCell(ny, nx);
-				health = max(health - cell->damage, 0);
+				//health = max(health - cell->damage, 0);
         cell->defenseValue += health;
 
         dist += 1;
@@ -1704,7 +1838,7 @@ class PathDefense{
 
         CELL *cell = getCell(coord.y, coord.x);
         if(cell->isPath()){
-          cell->basicValue += g_creepHealth * 8;
+          cell->basicValue += g_creepHealth * 10;
           //cell->defenseValue += coord.dist;
         }
 
@@ -1936,8 +2070,12 @@ class PathDefense{
             //value += damage + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
             //value += damage/2 + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
             value += damage/2 + cell->basicValue + cell->defenseValue + 5 * cell->pathCount - cell->damage/g_creepHealth;
+            value += 5 * cell->spawnPaths.size();
+            if(cell->aroundPathCount > 2){
+              value += 5 * cell->aroundPathCount;
+            }
           }else if(cell->isPlain()){
-            value -= 0.5;
+            value -= 1.5;
           }
 
           // 上下左右のセルを追加
@@ -1950,7 +2088,7 @@ class PathDefense{
               que.push(COORD(ny, nx));
             // 画面外をなるべく含めないように
             }else{
-              value -= 1;
+              value -= g_boardHeight/2;
             }
           }
         }

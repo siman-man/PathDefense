@@ -1,10 +1,7 @@
-Score = 4661
-Score = 19002
-Score = 10733
+Score = 4550
+Score = 18944
+Score = 10367
 Score = 9288
-Score = 3785
-Score = 6544
-Score = 6845
-Score = 33745
-Score = 7460
-Score = 158
+Score = 3641
+Score = 6097
+Score = 7180
