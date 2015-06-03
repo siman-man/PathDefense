@@ -223,7 +223,7 @@ typedef struct creep {
   int prevX;          // 前のターンに居たX座標
   int created_at;     // 出現時のターン数
   int disappeared_at; // 消失時のターン数
-  int targetBases;    // 狙っている基地候補(1つとは限らない)
+  int targetBase;     // 狙っている基地
   CreepState state;   // 敵の状態
 
   // 初期化
@@ -861,24 +861,17 @@ class PathDefense{
       //fprintf(stderr,"isAnyCreepReachableBase => creepCount = %lu\n", g_aliveCreepsIdList.size());
       set<int>::iterator it = g_aliveCreepsIdList.begin();
       // 全ての敵に対して処理する
-      while(it != g_aliveCreepsIdList.end()){
-        int creepId = (*it);
-        CREEP *creep = getCreep(creepId);
-        CELL *cell = getCell(creep->y, creep->x);
+      while(!g_aliveCreepsIdList.empty()){
+        // 敵の移動
+        moveCreeps();
 
-        assert(cell->basePaths.size() > 0);
+        // いずれかの敵が基地に到着していたらtrueを返す
+        if(isAnyCreepReachBase()) return true;
 
-        set<int>::iterator that = cell->basePaths.begin();
-
-        while(that != cell->basePaths.end()){
-          int baseId = (*that);
-          if(canReachBasePoint(creep->id, baseId)){
-            return true;
-          }
-          that++;
-        }
-
-        it++;
+        // 敵のロック
+        updateTowerData();
+        // 攻撃
+        attackTowers();
       }
 
       return false;
@@ -993,7 +986,6 @@ class PathDefense{
           for(int direct = 0; direct < 4; direct++){
             int ny = route.y + DY[direct];
             int nx = route.x + DX[direct];
-            int nz = calcZ(ny, nx);
 
             // 行動出来るセルであれば進む
             // が、もしチェックしたセルであれば処理を飛ばす
@@ -1439,21 +1431,24 @@ class PathDefense{
       // 敵情報の更新
       updateCreepsData(creeps);
 
+      // 敵の狙う基地を決める
+      setTargetBase();
+
       // 仮想的に敵を行動させる
-      moveCreeps();
+      // moveCreeps();
 
       // 各タワー情報の更新
       updateTowerData();
 
       // タワー攻撃
-      attackTowers();
+      // attackTowers();
 
       // 基地情報の更新
       updateBasesData(baseHealth);
 
       // 敵の進軍経路の値を防御価値を高く
       if(g_currentAmountMoney >= g_towerMinCost){
-        setCreepsMovePathValue();
+        // setCreepsMovePathValue();
       }
     }
 
@@ -1505,18 +1500,17 @@ class PathDefense{
      * @param (creeps) 敵の情報リスト
      *
      * @detail
-     * 敵の生存リストを更新
+     * 敵の生存リストを更新を行う
      */
     void updateCreepsData(vector<int> &creeps){
-      //! 敵の数
-      int creepCount = creeps.size() / 4;
-
+      //! 現在の敵の数
+      int currentCreepCount = creeps.size() / 4;
 
       // 生存中の敵リストをリセット
       g_aliveCreepsIdList.clear();
 
       // 各敵情報を更新する
-      for(int i = 0; i < creepCount; i++){
+      for(int i = 0; i < currentCreepCount; i++){
         int creepId = creeps[i*4];    // 敵IDの取得
         int health  = creeps[i*4+1];  // 体力
         int x       = creeps[i*4+2];  // x座標
@@ -1529,8 +1523,9 @@ class PathDefense{
           CREEP newCreep = createCreep(creepId, health, y, x);
 
           g_creepList[creepId] = newCreep;
+
+        // そうでない場合は各値を更新
         }else{
-          // そうでない場合は各値を更新
           creep->health = health;
           creep->prevY  = creep->y;
           creep->prevX  = creep->x;
@@ -1541,7 +1536,6 @@ class PathDefense{
         // 生存中の敵リストに追加
         g_aliveCreepsIdList.insert(creepId);
       }
-      //fprintf(stderr,"creepCount = %d - %lu\n", creepCount, g_aliveCreepsIdList.size());
     }
 
     /**
@@ -1554,24 +1548,16 @@ class PathDefense{
     void moveCreeps(){
       //fprintf(stderr,"moveCreeps =>\n");
       set<int>::iterator it = g_aliveCreepsIdList.begin();
-      // トライする回数
-      int tryLimit = 10;
-      int ny, nx;
 
       // 生存中の全ての敵が行動する
       while(it != g_aliveCreepsIdList.end()){
-        int tryCount = 0;
         int creepId = (*it);
         CREEP *creep = getCreep(creepId);
 
-        do {
-          tryCount += 1;
-          int direct = xor128() % 4;
-          ny = creep->y + DY[direct];
-          nx = creep->x + DX[direct];
-
-          if(tryCount > tryLimit) break;
-        }while(!canMoveCell(ny, nx) || (ny != creep->prevY && nx != creep->prevX));
+        int direct = g_shortestPathMap[creep->y][creep->x][creep->targetBase];
+        assert(direct != UNDEFINED);
+        creep->y += DY[direct];
+        creep->x += DX[direct];
 
         it++;
       }
@@ -1624,7 +1610,7 @@ class PathDefense{
       for(int towerId = 0; towerId < g_buildedTowerCount; towerId++){
         TOWER *tower = getTower(towerId);
 
-        int creepId = searchMostNearCreepId(tower->y, tower->x, tower->range);
+        int creepId = searchMostNearCreepId(tower);
 
         // 敵が見つかった場合はそれをロック
         if(creepId != NOT_FOUND){
@@ -1763,13 +1749,16 @@ class PathDefense{
         CREEP *creep = getCreep(creepId);
         CELL *cell = getCell(creep->y, creep->x);
 
-        assert(cell->basePaths.size() > 0);
-        set<int>::iterator that = cell->basePaths.begin();
 
-        while(that != cell->basePaths.end()){
-          int baseId = (*that);
-          putFootPrint(creep->id, baseId);
-          that++;
+        if(cell->isNotBasePoint()){
+          assert(cell->basePaths.size() > 0);
+          set<int>::iterator that = cell->basePaths.begin();
+
+          while(that != cell->basePaths.end()){
+            int baseId = (*that);
+            putFootPrint(creep->id, baseId);
+            that++;
+          }
         }
         it++;
       }
@@ -1853,6 +1842,24 @@ class PathDefense{
         }
       }
     }
+
+    /**
+     * @fn
+		 * 敵の目的地をランダムに設定する
+     */
+    void setTargetBase(){
+      set<int>::iterator it = g_aliveCreepsIdList.begin();
+
+      while(it != g_aliveCreepsIdList.end()){
+        int creepId = (*it);
+        CREEP *creep = getCreep(creepId);
+
+        int targetId = selectTargetBase(creepId);
+        creep->targetBase = targetId;
+
+        it++;
+      }
+    }
 		
 		/**
 		 * @fn [maybe]
@@ -1862,13 +1869,13 @@ class PathDefense{
 		 * @detail
 		 * あとでシミュレーションするときに使用する
 		 */
-		void selectTargetBase(int creepId){
+		int selectTargetBase(int creepId){
 			CREEP *creep = getCreep(creepId);
 			CELL *cell = getCell(creep->y, creep->x);
 			set<int>::iterator it = cell->basePaths.begin();
 
 			advance(it, xor128() % cell->basePaths.size());
-			creep->targetBases = (*it);
+      return (*it);
 		}
 		
 		/**
@@ -1934,16 +1941,16 @@ class PathDefense{
     /**
      * @fn [maybe]
      * ある地点から生存中の敵で一番近い敵のIDを返す
-     * @param (fromY) 出発地点のy座標
-     * @param (fromX) 出発地点のx座標
+     * @param (tower) タワー情報
      *
      * @return 一番近い敵のID
      * @detail
      * タワーが敵をロックするときに使う
      */
-    int searchMostNearCreepId(int fromY, int fromX, int range){
+    int searchMostNearCreepId(TOWER *tower){
       int mostNearCreepId = NOT_FOUND;
       int roughDist;
+      int range = tower->range;
       int minDist = INT_MAX;
 
       set<int>::iterator it = g_aliveCreepsIdList.begin();
@@ -1954,7 +1961,7 @@ class PathDefense{
         CREEP *creep = getCreep(creepId);
 
         // 敵との距離を計算
-        roughDist = calcRoughDist(fromY, fromX, creep->y, creep->x);
+        roughDist = calcRoughDist(tower->y, tower->x, creep->y, creep->x);
 
         if(minDist > roughDist && roughDist <= range * range){
           minDist = roughDist;
@@ -1965,6 +1972,24 @@ class PathDefense{
       }
 
       return mostNearCreepId;
+    }
+
+    /**
+     * @fn [not yet]
+     * いずれかの敵が基地に到達したかどうかを調べる
+     */
+    bool isAnyCreepReachBase(){
+      set<int>::iterator it = g_aliveCreepsIdList.begin();
+
+      while(it != g_aliveCreepsIdList.end()){
+        int creepId = (*it);
+        CREEP *creep = getCreep(creepId);
+        CELL *cell = getCell(creep->y, creep->x);
+
+        if(cell->isBasePoint()) return true;
+
+        it++;
+      }
     }
 
     /**
