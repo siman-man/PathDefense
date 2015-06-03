@@ -1041,6 +1041,7 @@ class PathDefense{
         cell = getCell(y,x);
         g_shortestPathMap[y][x][baseId] = prev;
         cell->basePaths.insert(baseId);
+
         if(isSpawnPoint){
           cell->pathCount += 1;
         }
@@ -1803,7 +1804,7 @@ class PathDefense{
 
         CELL *cell = getCell(ny, nx);
 				//health = max(health - cell->damage, 0);
-        cell->defenseValue += health;
+        cell->defenseValue += max(health - cell->damage, 0);
 
         dist += 1;
       }
@@ -1852,6 +1853,32 @@ class PathDefense{
         }
       }
     }
+		
+		/**
+		 * @fn [maybe]
+		 * 敵の目的地をランダムに設定する
+		 * @param (creepId) 敵のID
+		 *
+		 * @detail
+		 * あとでシミュレーションするときに使用する
+		 */
+		void selectTargetBase(int creepId){
+			CREEP *creep = getCreep(creepId);
+			CELL *cell = getCell(creep->y, creep->x);
+			set<int>::iterator it = cell->basePaths.begin();
+
+			advance(it, xor128() % cell->basePaths.size());
+			creep->targetBases = (*it);
+		}
+		
+		/**
+		 * @fn [not yet]
+		 * ゲームを仮想的に進めてタワーにどれだけのダメージが与えられるかを調査
+		 * 
+		 * @return 与えられるダメージの合計値
+		 */
+		int run(){
+		}
 
     /**
      * @fn [maybe]
