@@ -34,6 +34,7 @@ typedef long long ll;
 
 const int UNDEFINED        = -1;     //! 値が未定義
 const int UNLOCK           = -1;     //! 敵をロックしていない状態
+const int NOT_REACH        = -1;     //! 敵は基地に到達出来ない
 const int NOT_FOUND        = -1;     //! 敵を見つけたか見つけてないかの判定
 const int MAX_N            = 60 + 2; //! ボードの最大長(番兵込み)
 const int MAX_Z            = 2015;   //! 敵の最大数(実際は2000が最大)
@@ -857,24 +858,25 @@ class PathDefense{
      * @detail
      * 現在のタワーの建設状態から何もしなくても敵を倒せるのかどうかを調べる
      */
-    bool isAnyCreepReachableBase(){
+    int isAnyCreepReachableBase(){
       //fprintf(stderr,"isAnyCreepReachableBase => creepCount = %lu\n", g_aliveCreepsIdList.size());
-      set<int>::iterator it = g_aliveCreepsIdList.begin();
       // 全ての敵に対して処理する
       while(!g_aliveCreepsIdList.empty()){
         // 敵の移動
         moveCreeps();
 
         // いずれかの敵が基地に到着していたらtrueを返す
-        if(isAnyCreepReachBase()) return true;
+        int baseId = isAnyCreepReachBase();
+        if(baseId != NOT_REACH) return baseId;
 
         // 敵のロック
         updateTowerData();
+
         // 攻撃
-        attackTowers();
+        // attackTowers();
       }
 
-      return false;
+      return NOT_REACH;
     }     
 
     /**
@@ -963,8 +965,9 @@ class PathDefense{
      */
     void calcSpawnToBaseShortestPath(int spawnId, int fromY, int fromX){
       assert(spawnId != UNDEFINED);
-      int checkList[MAX_N][MAX_N];
-      memset(checkList, UNDEFINED, sizeof(checkList));
+      //int checkList[MAX_N][MAX_N];
+      //memset(checkList, UNDEFINED, sizeof(checkList));
+      map<int, bool> checkList;
       queue<ROUTE> que;
       ROUTE start(fromY, fromX, 0);
       que.push(start);
@@ -986,15 +989,20 @@ class PathDefense{
           for(int direct = 0; direct < 4; direct++){
             int ny = route.y + DY[direct];
             int nx = route.x + DX[direct];
+            int nz = calcZ(ny, nx);
 
             // 行動出来るセルであれば進む
             // が、もしチェックしたセルであれば処理を飛ばす
-            if(canMoveCell(ny, nx) && (checkList[ny][nx] == UNDEFINED || route.dist <= checkList[ny][nx])){
+            if(canMoveCell(ny, nx) && !checkList[nz]){
+              checkList[nz] = true; 
+            //if(canMoveCell(ny, nx) && (checkList[ny][nx] == UNDEFINED || (route.dist+1) <= checkList[ny][nx])){
+              /*
               if(checkList[ny][nx] == UNDEFINED){
                 checkList[ny][nx] = route.dist+1;
               }else{
                 checkList[ny][nx] = min(checkList[ny][nx], route.dist+1);
               }
+              */
               ROUTE next(ny, nx, route.dist+1);
               next.routes = route.routes;
               next.routes.push_back(COORD(ny, nx));
@@ -1166,7 +1174,7 @@ class PathDefense{
       SPAWN spawn(spawnId, y, x);
       g_spawnList.push_back(spawn);
 
-      fprintf(stderr,"Add spwan %d point: y = %d, x = %d\n", spawnId, y, x);
+      //fprintf(stderr,"Add spwan %d point: y = %d, x = %d\n", spawnId, y, x);
     }
 
     /**
@@ -1438,7 +1446,7 @@ class PathDefense{
       // moveCreeps();
 
       // 各タワー情報の更新
-      updateTowerData();
+      // updateTowerData();
 
       // タワー攻撃
       // attackTowers();
@@ -1559,6 +1567,9 @@ class PathDefense{
         creep->y += DY[direct];
         creep->x += DX[direct];
 
+        CELL *cell = getCell(creep->y, creep->x);
+        cell->defenseValue += creep->health;
+
         it++;
       }
     }
@@ -1592,7 +1603,7 @@ class PathDefense{
 
         // 敵をロックしていた場合攻撃
         if(tower->isLocked()){
-          attack(tower->lockedCreepId, tower->damage);
+          //attack(tower->lockedCreepId, tower->damage);
         }
       }
     }
@@ -1610,12 +1621,16 @@ class PathDefense{
       for(int towerId = 0; towerId < g_buildedTowerCount; towerId++){
         TOWER *tower = getTower(towerId);
 
+        // ロック情報を解除
+        tower->lockedCreepId = UNLOCK;
+
         int creepId = searchMostNearCreepId(tower);
 
         // 敵が見つかった場合はそれをロック
         if(creepId != NOT_FOUND){
           //fprintf(stderr,"tower locked %d\n", creepId);
           tower->lockedCreepId = creepId;
+          attack(tower->lockedCreepId, tower->damage);
         }
       }
     }
@@ -1793,9 +1808,42 @@ class PathDefense{
 
         CELL *cell = getCell(ny, nx);
 				//health = max(health - cell->damage, 0);
-        cell->defenseValue += max(health - cell->damage, 0);
+        cell->defenseValue += max(health - cell->damage, -10);
 
         dist += 1;
+      }
+    }
+
+    /**
+     * @fn [not yet]
+     * @param (y)
+     * @param (x)
+     * @param (range)
+     */
+    void updateDefenseValue(int y, int x, int range, int value = 1){
+      map<int, bool> checkList;
+      queue<COORD> que;
+      que.push(COORD(y, x, 0));
+
+      while(!que.empty()){
+        COORD coord = que.front(); que.pop();
+
+        if(coord.dist > range) continue;
+        CELL *cell = getCell(coord.y, coord.x);
+
+        if(cell->isPath()){
+          cell->defenseValue += value;
+        }
+
+        for(int direct = 0 ; direct < 4; direct++){
+          int ny = coord.y + DY[direct];
+          int nx = coord.x + DX[direct];
+          int nz = calcZ(ny, nx);
+
+          if(isInsideMap(ny, nx) & !checkList[nz]){
+            que.push(COORD(ny, nx, coord.dist+1));
+          }
+        }
       }
     }
 
@@ -1828,7 +1876,7 @@ class PathDefense{
 
         CELL *cell = getCell(coord.y, coord.x);
         if(cell->isPath()){
-          cell->basicValue += g_creepHealth * 10;
+          cell->basicValue += g_creepHealth * 8;
           //cell->defenseValue += coord.dist;
         }
 
@@ -1905,7 +1953,10 @@ class PathDefense{
 			// 全ての基地が破壊されたか、お金が無いときは何も行動しない
       if(!g_allBaseBroken && g_currentAmountMoney >= g_towerMinCost){
       	// 敵が生きているかどうかをチェック
-      	if(isAnyCreepReachableBase()){
+        int baseId = isAnyCreepReachableBase();
+      	if(baseId != NOT_REACH){
+          BASE *base = getBase(baseId);
+          updateDefenseValue(base->y, base->x, 3, 8 * g_creepHealth);
         	BUILD_INFO buildData = searchBestBuildPoint();
         	if(canBuildTower(buildData.type, buildData.y, buildData.x)){
           	buildTower(buildData.type, buildData.y, buildData.x);
@@ -1917,7 +1968,7 @@ class PathDefense{
       g_currentTurn += 1;
 
 			if(g_currentTurn == 2000){
-				finalResult();
+				//finalResult();
 			}
 
       // タワーの建設情報を返して終わり
@@ -1978,7 +2029,7 @@ class PathDefense{
      * @fn [not yet]
      * いずれかの敵が基地に到達したかどうかを調べる
      */
-    bool isAnyCreepReachBase(){
+    int isAnyCreepReachBase(){
       set<int>::iterator it = g_aliveCreepsIdList.begin();
 
       while(it != g_aliveCreepsIdList.end()){
@@ -1986,10 +2037,12 @@ class PathDefense{
         CREEP *creep = getCreep(creepId);
         CELL *cell = getCell(creep->y, creep->x);
 
-        if(cell->isBasePoint()) return true;
+        if(cell->isBasePoint()) return cell->baseId;
 
         it++;
       }
+
+      return NOT_REACH;
     }
 
     /**
@@ -2121,13 +2174,13 @@ class PathDefense{
             //value += cell->basicValue - cell->damage;
             //value += damage + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
             //value += damage/2 + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
-            value += damage/2 + cell->basicValue + cell->defenseValue + 5 * cell->pathCount - cell->damage/g_creepHealth;
-            value += 5 * cell->spawnPaths.size();
+            value += damage/2 + cell->basicValue + cell->defenseValue + 1 * cell->pathCount - 2 * (cell->damage);
+            //value += 5 * cell->spawnPaths.size();
             if(cell->aroundPathCount > 2){
-              value += 5 * cell->aroundPathCount;
+              value += 2 * cell->aroundPathCount;
             }
           }else if(cell->isPlain()){
-            value -= 1.5;
+            value -= 0.5;
           }
 
           // 上下左右のセルを追加
@@ -2140,7 +2193,7 @@ class PathDefense{
               que.push(COORD(ny, nx));
             // 画面外をなるべく含めないように
             }else{
-              value -= g_boardHeight/2;
+              value -= g_boardHeight/4;
             }
           }
         }
