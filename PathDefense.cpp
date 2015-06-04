@@ -1697,8 +1697,6 @@ class PathDefense{
     void initCellBasicValue(){
       // 各基地に対して処理を行う
       for(int baseId = 0; baseId < g_baseCount; baseId++){
-        BASE *base = getBase(baseId);
-
         setBaseDefenseValue(baseId);
       }
 
@@ -1871,14 +1869,6 @@ class PathDefense{
       return (*it);
 		}
 		
-		/**
-		 * @fn [not yet]
-		 * ゲームを仮想的に進めてタワーにどれだけのダメージが与えられるかを調査
-		 * 
-		 * @return 与えられるダメージの合計値
-		 */
-		int run(){
-		}
 
     /**
      * @fn [maybe]
@@ -1903,6 +1893,7 @@ class PathDefense{
           BASE *base = getBase(baseId);
           updateDefenseValue(base->y, base->x, 5, 8 * g_creepHealth);
         	BUILD_INFO buildData = searchBestBuildPoint();
+
         	if(canBuildTower(buildData.type, buildData.y, buildData.x)){
           	buildTower(buildData.type, buildData.y, buildData.x);
         	}
@@ -2129,7 +2120,7 @@ class PathDefense{
 
             //value += cell->spawnPaths.size();
 
-            if(cell->aroundPathCount > 2){
+            if(cell->aroundPathCount > 1){
               value += damage * (cell->aroundPathCount-1);
             }
           }else if(cell->isPlain()){
