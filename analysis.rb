@@ -16,8 +16,8 @@ class Summary
         if line =~ /Score/
           score = line.chomp.split(' ')[2].to_f
 
-          if score.zero?
-            puts "Seed #{cnt+1} is over"
+          if score == -1
+            puts "Seed #{cnt+1000} is over"
             score = Float::INFINITY
           end
           sum += score

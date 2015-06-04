@@ -476,6 +476,9 @@ unsigned long long xor128(){
 //! 現在のターン
 int g_currentTurn;
 
+//! 倍率
+int g_healthRate;
+
 //! 全滅フラグ
 bool g_allBaseBroken;
 
@@ -594,6 +597,9 @@ class PathDefense{
       // ターンを初期化を行う
       g_currentTurn = 0;
 
+			// 倍率
+			g_healthRate = (1 << g_currentTurn/500);
+
       // 出現した敵の総数を初期化
       g_totalCreepCount = 0;
 
@@ -644,6 +650,7 @@ class PathDefense{
      */
     void showGameData(){
       fprintf(stderr,"-----------------------------------------------\n");
+			fprintf(stderr,"Base count = %d\n", g_baseCount);
       fprintf(stderr,"BoardSize = Y: %d, X: %d\n", g_boardHeight, g_boardWidth);
       fprintf(stderr,"creepHealth = %d\n", g_creepHealth);
       fprintf(stderr,"reward = %d\n", g_reward);
@@ -846,6 +853,7 @@ class PathDefense{
         }
       }
 
+			//assert(bestType != UNDEFINED);
       return BUILD_INFO(bestType, bestY, bestX);
     }
 
@@ -1038,6 +1046,7 @@ class PathDefense{
         y += DY[(prev+2)%4];
         x += DX[(prev+2)%4];
 
+				assert(isInsideMap(y, x));
         cell = getCell(y,x);
         g_shortestPathMap[y][x][baseId] = prev;
         cell->basePaths.insert(baseId);
@@ -1153,7 +1162,7 @@ class PathDefense{
      */
     TOWER createTower(int towerType, int range, int damage, int cost){
       TOWER tower(towerType, range, damage, cost);
-      double count = ceil(g_creepHealth/(double)damage);
+      double count = g_creepHealth/damage;
       double value = (tower.range * (tower.damage)) / (double)tower.cost - count;
       tower.value = value;
 
@@ -1404,6 +1413,7 @@ class PathDefense{
      * @return 建設可能かどうかの判定値
      */
     bool canBuildTower(int towerType, int y, int x){
+			if(isOutsideMap(y, x)) return false;
       CELL *cell = getCell(y, x);
       TOWER *tower = referTower(towerType);
 
@@ -1567,8 +1577,10 @@ class PathDefense{
         creep->y += DY[direct];
         creep->x += DX[direct];
 
+				assert(isInsideMap(creep->y, creep->x));
         CELL *cell = getCell(creep->y, creep->x);
-        cell->defenseValue += creep->health;
+        //cell->defenseValue += creep->health;
+        cell->defenseValue += cell->pathCount * creep->health;
 
         it++;
       }
@@ -1743,6 +1755,7 @@ class PathDefense{
      * @detail
      */
     int updateCellDefenseValue(int y, int x){
+			assert(isInsideMap(y, x));
       CELL *cell = getCell(y, x);
 
       return cell->basicValue;
@@ -1762,6 +1775,7 @@ class PathDefense{
       while(it != g_aliveCreepsIdList.end()){
         int creepId = (*it);
         CREEP *creep = getCreep(creepId);
+				assert(isInsideMap(creep->y, creep->x));
         CELL *cell = getCell(creep->y, creep->x);
 
 
@@ -2174,7 +2188,11 @@ class PathDefense{
             //value += cell->basicValue - cell->damage;
             //value += damage + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
             //value += damage/2 + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
-            value += damage/2 + cell->basicValue + cell->defenseValue + 1 * cell->pathCount - 2 * (cell->damage);
+						if(cell->basicDamage == 0){
+            	value += 4 * damage + cell->basicValue + cell->defenseValue + 1 * cell->pathCount - 2 * (cell->damage);
+						}else{
+            	value += damage/2 + cell->basicValue + cell->defenseValue + 1 * cell->pathCount - 2 * (cell->damage);
+						}
             //value += 5 * cell->spawnPaths.size();
             if(cell->aroundPathCount > 2){
               value += 2 * cell->aroundPathCount;

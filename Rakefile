@@ -17,7 +17,7 @@ end
 
 task :one do
   system("g++ -W -Wall -Wno-sign-compare -O2 -o #{@filename} #{@filename}.cpp")
-  system("time java -jar #{@filename}Vis.jar -seed 10 -novis -exec './#{@filename}'")
+  system("time java -jar #{@filename}Vis.jar -seed 1 -novis -exec './#{@filename}'")
 end
 
 task :two do
@@ -28,7 +28,7 @@ end
 task :novis do
   system('rm result.txt')
   system("g++ -W -Wall -Wno-sign-compare -O2 -o #{@filename} #{@filename}.cpp")
-  1.upto(100) do |num|
+  1001.upto(1100) do |num|
     p num
     system("time java -jar ./#{@filename}Vis.jar -seed #{num} -novis -exec './#{@filename}' >> result.txt")
   end
