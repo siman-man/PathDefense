@@ -886,8 +886,6 @@ class PathDefense{
         // 敵のロック
         updateTowerData();
 
-        // 攻撃
-        // attackTowers();
 				turn += 1;
       }
 
@@ -1175,6 +1173,7 @@ class PathDefense{
       TOWER tower(towerType, range, damage, cost);
       double count = (8 * g_creepHealth)/damage;
       double value = (tower.range * (tower.damage)) / (double)tower.cost - count;
+			if(tower.range == 1 || tower.damage == 1) value -= 1.0;
       tower.value = value;
 
       return tower;
@@ -1464,15 +1463,6 @@ class PathDefense{
 
       // 敵の狙う基地を決める
       setTargetBase();
-
-      // 仮想的に敵を行動させる
-      // moveCreeps();
-
-      // 各タワー情報の更新
-      // updateTowerData();
-
-      // タワー攻撃
-      // attackTowers();
 
       // 基地情報の更新
       updateBasesData(baseHealth);
@@ -2131,7 +2121,7 @@ class PathDefense{
             //value += damage/2 + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
 						if(cell->basicDamage == 0){
             	value += 8 * damage + cell->basicValue + cell->defenseValue + 2 * cell->pathCount;
-						}else if(g_creepHealth <= 10 || g_spawnCount <= 10){
+						}else if(g_creepHealth <= 10){
             	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount + min(cell->basicDamage, g_creepHealth * 8);
 						}else{
             	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount - min(cell->basicDamage, g_creepHealth * 8);
