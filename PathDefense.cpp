@@ -612,11 +612,11 @@ class PathDefense{
       // ボードの初期化を行う
       initBoardData(board);
 
-      // タワーの初期化を行う
-      initTowerData(towerTypes);
-
       // カバーできる経路の数を計算
       initCoverCellCount();
+
+      // タワーの初期化を行う
+      initTowerData(towerTypes);
 
       // スポーン地点から基地までの最短路を計算
       initCellToBaseShortestPath();
@@ -1970,7 +1970,7 @@ class PathDefense{
         int baseId = isAnyCreepReachableBase();
       	if(baseId != NOT_REACH){
           BASE *base = getBase(baseId);
-          updateDefenseValue(base->y, base->x, 3, 8 * g_creepHealth);
+          updateDefenseValue(base->y, base->x, 5, 8 * g_creepHealth);
         	BUILD_INFO buildData = searchBestBuildPoint();
         	if(canBuildTower(buildData.type, buildData.y, buildData.x)){
           	buildTower(buildData.type, buildData.y, buildData.x);
