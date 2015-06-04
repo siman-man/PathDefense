@@ -457,7 +457,7 @@ typedef struct cell {
    * @return 進めるCellかどうかの判定値
    */
   bool canMove(){
-    return type != PLAIN;
+    return (type != PLAIN);
   }
 } CELL;
 
@@ -1415,7 +1415,7 @@ class PathDefense{
      * マップ内であり、かつ壁ではない場合は進める
      */
     bool canMoveCell(int y, int x){
-      if(!isInsideMap(y, x)) return false;
+      if(isOutsideMap(y, x)) return false;
 
       CELL *cell = getCell(y,x);
 
@@ -2159,9 +2159,9 @@ class PathDefense{
 						if(cell->basicDamage == 0){
             	value += 8 * damage + cell->basicValue + cell->defenseValue + 2 * cell->pathCount;
 						}else if(g_creepHealth <= 10){
-            	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount + min(cell->basicDamage, g_creepHealth * 8);
+            	value += cell->basicValue + cell->defenseValue + damage * cell->pathCount + min(cell->basicDamage, g_creepHealth * 8);
 						}else{
-            	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount - min(cell->basicDamage, g_creepHealth * 8);
+            	value += cell->basicValue + cell->defenseValue + damage * cell->pathCount - min(cell->basicDamage, g_creepHealth * 8);
 						}
 
             set<int>::iterator it = cell->spawnPaths.begin();
