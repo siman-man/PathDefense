@@ -440,6 +440,15 @@ typedef struct cell {
     return type == PATH || type == SPAWN_POINT;
   }
 
+	/**
+	 * @fn [not yet]
+	 * タワーかどうか
+	 * @return タワーかどうかの判定値
+	 */
+	bool isTowerPoint(){
+		return type == TOWER_POINT;
+	}
+
   /**
    * @fn [complete]
    * 進めるCellかどうかを調べる
@@ -1172,8 +1181,12 @@ class PathDefense{
     TOWER createTower(int towerType, int range, int damage, int cost){
       TOWER tower(towerType, range, damage, cost);
       double count = (8 * g_creepHealth)/damage;
+			//*
       double value = (tower.range * (tower.damage)) / (double)tower.cost - count;
-			if(tower.range == 1 || tower.damage == 1) value -= 1.0;
+			/*/
+      double value = (tower.range * (tower.damage)) / (double)tower.cost - count;
+			//*/
+			if(tower.range == 1) value -= 1.0;
       tower.value = value;
 
       return tower;
@@ -1338,7 +1351,7 @@ class PathDefense{
     }
 
     /**
-     * @fn [not yet]
+     * @fn [complete]
      * 指定した種別のタワー情報を取得
      * @param (towerType) タワーの種別
      *
@@ -1759,9 +1772,11 @@ class PathDefense{
 
     /**
      * @fn [not yet]
-     * @param (y)
-     * @param (x)
-     * @param (range)
+		 * 防御の評価値を更新
+     * @param (y)			始点のY座標
+     * @param (x)			始点のX座標
+     * @param (range) 範囲
+		 * @param (value) 評価値
      */
     void updateDefenseValue(int y, int x, int range, int value = 1){
       map<int, bool> checkList;
@@ -2120,12 +2135,16 @@ class PathDefense{
 
             //value += cell->spawnPaths.size();
 
-            if(cell->aroundPathCount > 1){
+            if(cell->aroundPathCount > 2){
               value += damage * (cell->aroundPathCount-1);
             }
+					}else if(cell->isBasePoint()){
+            value -= 1;
           }else if(cell->isPlain()){
             value -= 1;
-          }
+          }else if(cell->isTowerPoint()){
+            value -= 1;
+					}
 
           // 上下左右のセルを追加
           for(int i = 0; i < 4; i++){
