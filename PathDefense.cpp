@@ -867,9 +867,11 @@ class PathDefense{
      * 現在のタワーの建設状態から何もしなくても敵を倒せるのかどうかを調べる
      */
     int isAnyCreepReachableBase(){
+			int turn = 0;
       //fprintf(stderr,"isAnyCreepReachableBase => creepCount = %lu\n", g_aliveCreepsIdList.size());
       // 全ての敵に対して処理する
       while(!g_aliveCreepsIdList.empty()){
+				if(g_currentTurn + turn >= 2000) break;
         // 敵の移動
         moveCreeps();
 
@@ -882,6 +884,7 @@ class PathDefense{
 
         // 攻撃
         // attackTowers();
+				turn += 1;
       }
 
       return NOT_REACH;
@@ -2189,9 +2192,11 @@ class PathDefense{
             //value += damage + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
             //value += damage/2 + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
 						if(cell->basicDamage == 0){
-            	value += 4 * damage + cell->basicValue + cell->defenseValue + 1 * cell->pathCount - 2 * (cell->damage);
+            	value += 8 * damage + cell->basicValue + cell->defenseValue + 1 * cell->pathCount;
+						}else if(g_creepHealth <= 10){
+            	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount + min(cell->basicDamage, g_creepHealth * 8);
 						}else{
-            	value += damage/2 + cell->basicValue + cell->defenseValue + 1 * cell->pathCount - 2 * (cell->damage);
+            	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount - min(cell->basicDamage, g_creepHealth * 8);
 						}
             //value += 5 * cell->spawnPaths.size();
             if(cell->aroundPathCount > 2){
