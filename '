@@ -872,7 +872,6 @@ class PathDefense{
       // 全ての敵に対して処理する
       while(!g_aliveCreepsIdList.empty()){
 				if(g_currentTurn + turn >= 2000) break;
-				if(turn >= g_boardWidth/2) break;
         // 敵の移動
         moveCreeps();
 
@@ -1467,6 +1466,11 @@ class PathDefense{
 
       // 基地情報の更新
       updateBasesData(baseHealth);
+
+      // 敵の進軍経路の値を防御価値を高く
+      if(g_currentAmountMoney >= g_towerMinCost){
+        // setCreepsMovePathValue();
+      }
     }
 
     /**
@@ -1758,6 +1762,73 @@ class PathDefense{
       CELL *cell = getCell(y, x);
 
       return cell->basicValue;
+    }
+
+    /**
+     * @fn [maybe]
+     * 敵の予測経路のポイントを高くする
+     * 
+     * @detail
+     * 敵が行動する経路を計算して、その部分の防御優先度を高くする
+     * 進行方向の値だけを伸ばす
+     */
+    void setCreepsMovePathValue(){
+      set<int>::iterator it = g_aliveCreepsIdList.begin();
+
+      while(it != g_aliveCreepsIdList.end()){
+        int creepId = (*it);
+        CREEP *creep = getCreep(creepId);
+				assert(isInsideMap(creep->y, creep->x));
+        CELL *cell = getCell(creep->y, creep->x);
+
+
+        if(cell->isNotBasePoint()){
+          assert(cell->basePaths.size() > 0);
+          set<int>::iterator that = cell->basePaths.begin();
+
+          while(that != cell->basePaths.end()){
+            int baseId = (*that);
+            putFootPrint(creep->id, baseId);
+            that++;
+          }
+        }
+        it++;
+      }
+    }
+
+    /**
+     * @fn [maybe]
+     * 基地までの足跡をつける
+     * @param (y)      Y座標
+     * @param (x)      X座標
+     * @param (baseId) 目的地の基地ID
+     * @param (limit)  距離の限界
+     *
+     * @sa setCreepsMovePathValue
+     * @detail
+     * 基地までの足跡をつける(そのまま評価値に反映)
+     */
+    void putFootPrint(int creepId, int baseId, int limit = 100){
+      CREEP *creep = getCreep(creepId);
+      BASE *base = getBase(baseId);
+      map<int, bool> checkList;
+      int y = creep->y;
+      int x = creep->x;
+      int health = creep->health;
+      int dist = 0;
+
+      while((base->y != y || base->x != x) && (dist < limit) && (health > 0)){
+        int direct = g_shortestPathMap[y][x][baseId];
+        assert(direct != UNDEFINED);
+        int ny = y + DY[direct];
+        int nx = x + DX[direct];
+
+        CELL *cell = getCell(ny, nx);
+				//health = max(health - cell->damage, 0);
+        cell->defenseValue += max(health - cell->damage, -10);
+
+        dist += 1;
+      }
     }
 
     /**
@@ -2125,7 +2196,7 @@ class PathDefense{
 						}else if(g_creepHealth <= 10){
             	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount + min(cell->basicDamage, g_creepHealth * 8);
 						}else{
-            	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount - min(cell->basicDamage, g_creepHealth * 8);
+            	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount - 2 * min(cell->basicDamage, g_creepHealth * 8);
 						}
             //value += 5 * cell->spawnPaths.size();
             if(cell->aroundPathCount > 2){
