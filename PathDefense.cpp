@@ -2121,7 +2121,7 @@ class PathDefense{
             //value += damage + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
             //value += damage/2 + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
 						if(cell->basicDamage == 0){
-            	value += 8 * damage + cell->basicValue + cell->defenseValue + 1 * cell->pathCount;
+            	value += 8 * damage + cell->basicValue + cell->defenseValue + 2 * cell->pathCount;
 						}else if(g_creepHealth <= 10){
             	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount + min(cell->basicDamage, g_creepHealth * 8);
 						}else{
@@ -2145,7 +2145,7 @@ class PathDefense{
               que.push(COORD(ny, nx));
             // 画面外をなるべく含めないように
             }else{
-              value -= g_boardHeight/4;
+              value -= g_boardHeight/2;
             }
           }
         }
