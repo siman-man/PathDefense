@@ -547,6 +547,9 @@ int g_buildedTowerCount;
 //! スポーン地点のリスト
 vector<SPAWN> g_spawnList;
 
+//! スポーン地点の数
+int g_spawnCount;
+
 //! 前に行動したstepを覚える配列
 int g_prevStep[MAX_N][MAX_N];
 
@@ -977,9 +980,12 @@ class PathDefense{
      */
     void calcSpawnToBaseShortestPath(int spawnId, int fromY, int fromX){
       assert(spawnId != UNDEFINED);
-      //int checkList[MAX_N][MAX_N];
-      //memset(checkList, UNDEFINED, sizeof(checkList));
+      /*
+			int checkList[MAX_N][MAX_N];
+      memset(checkList, UNDEFINED, sizeof(checkList));
+			/*/
       map<int, bool> checkList;
+			//*/
       queue<ROUTE> que;
       ROUTE start(fromY, fromX, 0);
       que.push(start);
@@ -1001,20 +1007,21 @@ class PathDefense{
           for(int direct = 0; direct < 4; direct++){
             int ny = route.y + DY[direct];
             int nx = route.x + DX[direct];
-            int nz = calcZ(ny, nx);
 
             // 行動出来るセルであれば進む
             // が、もしチェックしたセルであれば処理を飛ばす
+						//*
+            int nz = calcZ(ny, nx);
             if(canMoveCell(ny, nx) && !checkList[nz]){
               checkList[nz] = true; 
-            //if(canMoveCell(ny, nx) && (checkList[ny][nx] == UNDEFINED || (route.dist+1) <= checkList[ny][nx])){
-              /*
+						/*/
+            if(canMoveCell(ny, nx) && (checkList[ny][nx] == UNDEFINED || (route.dist+1) <= checkList[ny][nx])){
               if(checkList[ny][nx] == UNDEFINED){
                 checkList[ny][nx] = route.dist+1;
               }else{
                 checkList[ny][nx] = min(checkList[ny][nx], route.dist+1);
               }
-              */
+							//*/
               ROUTE next(ny, nx, route.dist+1);
               next.routes = route.routes;
               next.routes.push_back(COORD(ny, nx));
@@ -1166,7 +1173,7 @@ class PathDefense{
      */
     TOWER createTower(int towerType, int range, int damage, int cost){
       TOWER tower(towerType, range, damage, cost);
-      double count = g_creepHealth/damage;
+      double count = (8 * g_creepHealth)/damage;
       double value = (tower.range * (tower.damage)) / (double)tower.cost - count;
       tower.value = value;
 
@@ -1186,6 +1193,8 @@ class PathDefense{
     void addSpawnPoint(int spawnId, int y, int x){
       SPAWN spawn(spawnId, y, x);
       g_spawnList.push_back(spawn);
+
+			g_spawnCount = g_spawnList.size();
 
       //fprintf(stderr,"Add spwan %d point: y = %d, x = %d\n", spawnId, y, x);
     }
@@ -2122,17 +2131,19 @@ class PathDefense{
             //value += damage/2 + cell->basicValue + cell->pathCount - cell->damage/g_creepHealth;
 						if(cell->basicDamage == 0){
             	value += 8 * damage + cell->basicValue + cell->defenseValue + 2 * cell->pathCount;
-						}else if(g_creepHealth <= 10){
+						}else if(g_creepHealth <= 10 || g_spawnCount <= 10){
             	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount + min(cell->basicDamage, g_creepHealth * 8);
 						}else{
             	value += cell->basicValue + cell->defenseValue + 1 * cell->pathCount - min(cell->basicDamage, g_creepHealth * 8);
 						}
-            //value += 5 * cell->spawnPaths.size();
+
+            //value += cell->spawnPaths.size();
+
             if(cell->aroundPathCount > 2){
               value += damage * (cell->aroundPathCount-1);
             }
           }else if(cell->isPlain()){
-            value -= 1.5;
+            value -= 1;
           }
 
           // 上下左右のセルを追加
