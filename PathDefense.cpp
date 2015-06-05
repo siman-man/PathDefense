@@ -499,6 +499,9 @@ CELL g_board[MAX_N][MAX_N];
 //! 現在の所持金の合計
 int g_currentAmountMoney;
 
+//! このゲームを諦めるかどうか
+int g_giveup;
+
 //! 敵を倒すと貰える報酬
 int g_reward;
 
@@ -620,6 +623,8 @@ class PathDefense{
       // ターンを初期化を行う
       g_currentTurn = 0;
 
+			// このゲームを諦める
+			g_giveup = true;
 
       // 出現した敵の総数を初期化
       g_totalCreepCount = 0;
@@ -1202,6 +1207,11 @@ class PathDefense{
       double value = (tower.range * (tower.damage)) / (double)tower.cost;
 			//*/
 			if(tower.range == 1) value -= 1.0;
+
+			// 諦めるのを諦める
+			if(range * damage * 3 >= g_creepHealth){
+				g_giveup = false;
+			}
 
       tower.value = value;
 
@@ -1980,7 +1990,7 @@ class PathDefense{
       g_tempAliveCreepsIdList = g_aliveCreepsIdList;
 
 			// 全ての基地が破壊されたか、お金が無いときは何も行動しない
-      if(!g_allBaseBroken && g_currentAmountMoney >= g_towerMinCost){
+      if(!g_giveup && !g_allBaseBroken && g_currentAmountMoney >= g_towerMinCost){
         for(int i = 0; i < 2 && g_currentAmountMoney >= g_towerMinCost; i++){
       	  // 敵が生きているかどうかをチェック
           int baseId = isAnyCreepReachableBase();
