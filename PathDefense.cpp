@@ -614,8 +614,6 @@ class PathDefense{
       // ターンを初期化を行う
       g_currentTurn = 0;
 
-			// 倍率
-			g_healthRate = (1 << g_currentTurn/500);
 
       // 出現した敵の総数を初期化
       g_totalCreepCount = 0;
@@ -1469,6 +1467,9 @@ class PathDefense{
       // 現在の所持金の更新
       g_currentAmountMoney = money;
 
+			// 倍率の更新
+			g_healthRate = (1 << g_currentTurn/500);
+
       //fprintf(stderr,"turn = %d, g_currentAmountMoney = %d\n", g_currentTurn, g_currentAmountMoney);
 
       // タワー情報のリセット
@@ -1968,7 +1969,7 @@ class PathDefense{
 
       	  if(baseId != NOT_REACH){
             BASE *base = getBase(baseId);
-            updateDefenseValue(base->y, base->x, 5, 8 * g_creepHealth);
+            updateDefenseValue(base->y, base->x, 5, g_healthRate * g_creepHealth);
         	  BUILD_INFO buildData = searchBestBuildPoint();
 
         	  if(canBuildTower(buildData.type, buildData.y, buildData.x)){
@@ -2188,7 +2189,7 @@ class PathDefense{
 
             // もし画面外で無い場合はキューに追加
             if(isInsideMap(ny, nx)){
-              que.push(COORD(ny, nx));
+              que.push(COORD(ny, nx, coord.dist+1));
             // 画面外をなるべく含めないように
             }else{
               value -= g_boardHeight/2;
