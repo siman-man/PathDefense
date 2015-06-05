@@ -517,6 +517,9 @@ int g_towerMinCost;
 //! ボードの横幅
 int g_boardWidth;
 
+//! 狙われやすい基地の目安
+int g_targetedBasePoint[MAX_B];
+
 //! ボードの縦幅
 int g_boardHeight;
 
@@ -623,6 +626,9 @@ class PathDefense{
 
       // 最短路マップの初期化
       memset(g_shortestPathMap, UNDEFINED, sizeof(g_shortestPathMap));
+
+			// 狙われ安さの初期化
+			memset(g_targetedBasePoint, 0, sizeof(g_targetedBasePoint));
 
       // ボードの初期化を行う
       initBoardData(board);
@@ -1012,6 +1018,7 @@ class PathDefense{
 
         // 基地に辿り着いてそれがマンハッタン距離と同等の場合は経路を復元して登録を行う
         if(cell->isBasePoint() && route.dist <= calcManhattanDist(fromY, fromX, route.y, route.x)){
+					g_targetedBasePoint[cell->baseId] += 1;
           // 最短経路の登録
           registPath(spawnId, route.routes);
         }else{
@@ -1191,6 +1198,12 @@ class PathDefense{
       double value = (tower.range * (tower.damage)) / (double)tower.cost - count;
 			//*/
 			if(tower.range == 1) value -= 1.0;
+			if(g_creepHealth <= 5){
+				if(g_creepHealth/damage > 1){
+					value -= 10.0;
+				}
+			}
+
       tower.value = value;
 
       return tower;
@@ -1830,17 +1843,17 @@ class PathDefense{
     }
 
     /**
-     * @fn [not yet]
+     * @fn [maybe]
 		 * 防御の評価値を更新
      * @param (y)			始点のY座標
      * @param (x)			始点のX座標
      * @param (range) 範囲
 		 * @param (value) 評価値
      */
-    void updateDefenseValue(int y, int x, int range, int value = 1){
+    void updateDefenseValue(BASE *base, int range, int value = 1){
       map<int, bool> checkList;
       queue<COORD> que;
-      que.push(COORD(y, x, 0));
+      que.push(COORD(base->y, base->x, 0));
 
       while(!que.empty()){
         COORD coord = que.front(); que.pop();
@@ -1849,7 +1862,12 @@ class PathDefense{
         CELL *cell = getCell(coord.y, coord.x);
 
         if(cell->isPath()){
-          cell->defenseValue += value;
+					//cell->defenseValue += g_targetedBasePoint[base->id];
+        	if(cell->basePaths.find(base->id) != cell->basePaths.end()){
+          	cell->defenseValue += value;
+					}else{
+          	cell->defenseValue += value;
+					}
         }
 
         for(int direct = 0 ; direct < 4; direct++){
@@ -1892,6 +1910,7 @@ class PathDefense{
         checkList[z] = true;
 
         CELL *cell = getCell(coord.y, coord.x);
+
         if(cell->isPath()){
           cell->basicValue += g_creepHealth * 8;
           //cell->defenseValue += coord.dist;
@@ -1969,7 +1988,7 @@ class PathDefense{
 
       	  if(baseId != NOT_REACH){
             BASE *base = getBase(baseId);
-            updateDefenseValue(base->y, base->x, 5, g_healthRate * g_creepHealth);
+            updateDefenseValue(base, 5, g_healthRate * g_creepHealth);
         	  BUILD_INFO buildData = searchBestBuildPoint();
 
         	  if(canBuildTower(buildData.type, buildData.y, buildData.x)){
@@ -1988,7 +2007,7 @@ class PathDefense{
       g_currentTurn += 1;
 
 			if(g_currentTurn == 2000){
-				//finalResult();
+				finalResult();
 			}
 
       // タワーの建設情報を返して終わり
@@ -2002,10 +2021,16 @@ class PathDefense{
 		void finalResult(){
 			int spawnCount = g_spawnList.size();
 
+			/*
 			for(int spawnId = 0; spawnId < spawnCount; spawnId++){
 				SPAWN *spawn = getSpawn(spawnId);
 
 				fprintf(stderr,"Spawn %d: pop up creep count = %d\n", spawnId, spawn->popUpCreepCount);
+			}
+			*/
+
+			for(int baseId = 0; baseId < g_baseCount; baseId++){
+				fprintf(stderr,"Targeted Point %d = %d\n", baseId, g_targetedBasePoint[baseId]);
 			}
 		}
 
@@ -2158,7 +2183,7 @@ class PathDefense{
 
           if(cell->isPath()){
 						if(cell->basicDamage == 0){
-            	value += 8 * damage + cell->basicValue + cell->defenseValue + 2 * cell->pathCount;
+            	value += 4 * damage + cell->basicValue + cell->defenseValue + 2 * cell->pathCount;
 						}else if(g_creepHealth <= 10){
             	value += cell->basicValue + cell->defenseValue + damage * cell->pathCount + min(cell->basicDamage, g_creepHealth * 8);
 						}else{
