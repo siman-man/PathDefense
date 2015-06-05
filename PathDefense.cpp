@@ -511,6 +511,9 @@ int g_baseCount;
 //! タワーの総数
 int g_towerCount;
 
+//! 本当のタワーの総数
+int g_realTowerCount;
+
 //! タワー建設の最小費用
 int g_towerMinCost;
 
@@ -630,6 +633,9 @@ class PathDefense{
 			// 狙われ安さの初期化
 			memset(g_targetedBasePoint, 0, sizeof(g_targetedBasePoint));
 
+      // 敵の初期体力の初期化
+      g_creepHealth = creepHealth;
+
       // ボードの初期化を行う
       initBoardData(board);
 
@@ -650,9 +656,6 @@ class PathDefense{
 
       // 報酬の初期化
       g_reward = creepMoney;
-
-      // 敵の初期体力の初期化
-      g_creepHealth = creepHealth;
 
       // セルの防御価値を初期化
       initCellBasicValue();
@@ -771,6 +774,7 @@ class PathDefense{
     void initTowerData(vector<int> &towerTypes){
       // タワーの種類の数
       g_towerCount = towerTypes.size() / 3;
+			g_realTowerCount = g_towerCount;
 
       //fprintf(stderr,"towerCount = %d\n", g_towerCount);
       priority_queue<TOWER, vector<TOWER>, greater<TOWER> > pque;
@@ -1192,17 +1196,12 @@ class PathDefense{
     TOWER createTower(int towerType, int range, int damage, int cost){
       TOWER tower(towerType, range, damage, cost);
       double count = (8 * g_creepHealth)/damage;
-			//*
+			/*
       double value = (tower.range * (tower.damage)) / (double)tower.cost - count;
 			/*/
-      double value = (tower.range * (tower.damage)) / (double)tower.cost - count;
+      double value = (tower.range * (tower.damage)) / (double)tower.cost;
 			//*/
 			if(tower.range == 1) value -= 1.0;
-			if(g_creepHealth <= 5){
-				if(g_creepHealth/damage > 1){
-					value -= 10.0;
-				}
-			}
 
       tower.value = value;
 
@@ -2162,6 +2161,11 @@ class PathDefense{
      */
     int calcBuildValue(int fromY, int fromX, int range, int damage){
       int value = 0;
+			CELL *rootCell = getCell(fromY, fromX);
+
+			if(g_realTowerCount == 1 && rootCell->aroundPathCount >= 3){
+				value += 10000 * rootCell->aroundPathCount;
+			}
 
       queue<COORD> que;
       que.push(COORD(fromY, fromX, 0));
