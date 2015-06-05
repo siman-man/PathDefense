@@ -250,6 +250,14 @@ typedef struct creep {
   bool isDead(){
     return health <= 0;
   }
+
+  /**
+   * @fn [not yet]
+   * 生きているかどうかを確認
+   */
+  bool isNotDead(){
+    return health > 0;
+  }
 } CREEP;
 
 /*
@@ -854,7 +862,7 @@ class PathDefense{
      * @return 建設する場所とタワーID
      */
     BUILD_INFO searchBestBuildPoint(){
-      int bestValue = INT_MIN;
+      int bestValue = 0;
       int bestY = UNDEFINED;
       int bestX = UNDEFINED;
       int bestType = UNDEFINED;
@@ -1213,7 +1221,9 @@ class PathDefense{
 			// 諦めるのを諦める
 			if(range * damage * 3 >= g_creepHealth){
 				g_giveup = false;
-			}
+			}else{
+        value -= 1.0;
+      }
 
       tower.value = value;
 
@@ -1826,7 +1836,7 @@ class PathDefense{
 
     /**
      * @fn [not yet]
-     * タワーが倒された時に守る必要が無くなった経路を探す
+     * 基地が倒された時に守る必要が無くなった経路を探す
      * @param (baseId) 倒された基地ID
      *
      * @detail
@@ -1865,6 +1875,7 @@ class PathDefense{
       map<int, bool> checkList;
       queue<COORD> que;
       que.push(COORD(base->y, base->x, 0));
+      double rate = 1.0;
 
       while(!que.empty()){
         COORD coord = que.front(); que.pop();
@@ -1873,12 +1884,7 @@ class PathDefense{
         CELL *cell = getCell(coord.y, coord.x);
 
         if(cell->isPath()){
-					//cell->defenseValue += g_targetedBasePoint[base->id];
-        	if(cell->basePaths.find(base->id) != cell->basePaths.end()){
-          	cell->defenseValue += value;
-					}else{
-          	cell->defenseValue += value;
-					}
+          cell->defenseValue += rate * value;
         }
 
         for(int direct = 0 ; direct < 4; direct++){
@@ -1992,7 +1998,7 @@ class PathDefense{
       g_tempAliveCreepsIdList = g_aliveCreepsIdList;
 
 			// 全ての基地が破壊されたか、お金が無いときは何も行動しない
-      if(!g_giveup && !g_allBaseBroken && g_currentAmountMoney >= g_towerMinCost){
+      if(!g_giveup && (g_currentTurn < 1500 || !g_allBaseBroken) && g_currentAmountMoney >= g_towerMinCost){
         for(int i = 0; i < 2 && g_currentAmountMoney >= g_towerMinCost; i++){
       	  // 敵が生きているかどうかをチェック
           int baseId = isAnyCreepReachableBase();
@@ -2071,6 +2077,7 @@ class PathDefense{
         roughDist = calcRoughDist(tower->y, tower->x, creep->y, creep->x);
 
         if(minDist > roughDist && roughDist <= range * range){
+          assert(creep->isNotDead());
           minDist = roughDist;
           mostNearCreepId = creepId;
         }
@@ -2216,11 +2223,11 @@ class PathDefense{
               value += damage * (cell->aroundPathCount-1);
             }
 					}else if(cell->isBasePoint()){
-            value -= 1;
+            value -= damage;
           }else if(cell->isPlain()){
-            value -= 1;
+            value -= damage;
           }else if(cell->isTowerPoint()){
-            value -= 1;
+            value -= damage;
 					}
 
           // 上下左右のセルを追加

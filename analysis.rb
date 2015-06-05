@@ -17,10 +17,10 @@ class Summary
           score = line.chomp.split(' ')[2].to_f
 
           if score == -1
-            puts "Seed #{cnt+1001} is over"
+            puts "Seed #{cnt+2001} is over"
             score = Float::INFINITY
           elsif score <= 1000
-            puts "Seed #{cnt+1001} is zero"
+            puts "Seed #{cnt+2001} is zero"
           end
           sum += score
           cnt += 1
