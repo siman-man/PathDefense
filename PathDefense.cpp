@@ -906,10 +906,11 @@ class PathDefense{
      */
     int isAnyCreepReachableBase(){
 			int turn = 0;
+      int rate = (g_aliveCreepsIdList.size() >= 10)? 2 : 4;
       // 全ての敵に対して処理する
       while(!g_aliveCreepsIdList.empty()){
 				if(g_currentTurn + turn >= 2000) break;
-				if(turn >= g_boardWidth/2) break;
+				if(turn >= g_boardWidth/rate) break;
         // 敵の移動
         moveCreeps();
 
@@ -2207,8 +2208,6 @@ class PathDefense{
           if(cell->isPath()){
 						if(cell->basicDamage == 0){
             	value += 4 * damage + cell->basicValue + cell->defenseValue + 2 * cell->pathCount;
-						}else if(g_creepHealth <= 10){
-            	value += cell->basicValue + cell->defenseValue + damage * cell->pathCount + min(cell->basicDamage, g_creepHealth * 8);
 						}else{
             	value += cell->basicValue + cell->defenseValue + damage * cell->pathCount - min(cell->basicDamage, g_creepHealth * 8);
 						}
