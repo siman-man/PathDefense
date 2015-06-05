@@ -19,7 +19,7 @@ class Summary
           if score == -1
             puts "Seed #{cnt+1001} is over"
             score = Float::INFINITY
-          elsif score.zero?
+          elsif score <= 1000
             puts "Seed #{cnt+1001} is zero"
           end
           sum += score

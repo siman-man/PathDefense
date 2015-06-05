@@ -679,6 +679,7 @@ class PathDefense{
      */
     void showGameData(){
       fprintf(stderr,"-----------------------------------------------\n");
+			fprintf(stderr,"Tower count = %d\n", g_realTowerCount);
 			fprintf(stderr,"Base count = %d\n", g_baseCount);
       fprintf(stderr,"BoardSize = Y: %d, X: %d\n", g_boardHeight, g_boardWidth);
       fprintf(stderr,"creepHealth = %d\n", g_creepHealth);
@@ -1207,6 +1208,7 @@ class PathDefense{
       double value = (tower.range * (tower.damage)) / (double)tower.cost;
 			//*/
 			if(tower.range == 1) value -= 1.0;
+			if(value < 0) g_realTowerCount -= 1;
 
 			// 諦めるのを諦める
 			if(range * damage * 3 >= g_creepHealth){
@@ -2173,7 +2175,7 @@ class PathDefense{
       int value = 0;
 			CELL *rootCell = getCell(fromY, fromX);
 
-			if(g_realTowerCount == 1 && rootCell->aroundPathCount >= 3){
+			if(g_realTowerCount <= 1 && rootCell->aroundPathCount >= 3){
 				value += 10000 * rootCell->aroundPathCount;
 			}
 
